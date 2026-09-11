@@ -71,7 +71,8 @@ public sealed class UpdateService : IDisposable
             asset.Name,
             downloadUri,
             asset.Size,
-            sha256);
+            sha256,
+            release.Body ?? string.Empty);
     }
 
     public async Task<PreparedUpdate> PrepareAsync(
@@ -245,6 +246,7 @@ public sealed class UpdateService : IDisposable
 
     private sealed record GitHubRelease(
         [property: JsonPropertyName("tag_name")] string TagName,
+        [property: JsonPropertyName("body")] string? Body,
         [property: JsonPropertyName("assets")] GitHubAsset[] Assets);
 
     private sealed record GitHubAsset(

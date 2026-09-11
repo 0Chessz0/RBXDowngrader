@@ -75,6 +75,8 @@ public partial class MainWindow : Window
             _availableUpdate = await _updateService.CheckAsync(_lifetimeCancellation.Token);
             if (_availableUpdate is null)
             {
+                ResetReleaseNotes();
+                UpdateBanner.Visibility = Visibility.Collapsed;
                 if (manual)
                     SetStatus("You're up to date");
                 return;
@@ -82,11 +84,13 @@ public partial class MainWindow : Window
 
             if (!manual && _updateSkipStore.IsSkipped(_availableUpdate.AvailableVersion))
             {
+                ResetReleaseNotes();
                 UpdateBanner.Visibility = Visibility.Collapsed;
                 return;
             }
 
             UpdateBannerText.Text = $"RBXDowngrader {_availableUpdate.AvailableVersion.ToString(3)} is available";
+            PopulateReleaseNotes(_availableUpdate.ReleaseNotes);
             UpdateButton.Content = "Update";
             UpdateButton.IsEnabled = true;
             SkipUpdateButton.Visibility = Visibility.Visible;
@@ -111,6 +115,13 @@ public partial class MainWindow : Window
     private async void CheckUpdates_Click(object sender, RoutedEventArgs e) =>
         await CheckForUpdatesAsync(manual: true);
 
+    private void WhatsNew_Click(object sender, RoutedEventArgs e)
+    {
+        var showNotes = ReleaseNotesPanel.Visibility != Visibility.Visible;
+        ReleaseNotesPanel.Visibility = showNotes ? Visibility.Visible : Visibility.Collapsed;
+        WhatsNewButton.Content = showNotes ? "Hide notes" : "What's new";
+    }
+
     private void SkipUpdate_Click(object sender, RoutedEventArgs e)
     {
         if (_availableUpdate is null)
@@ -120,6 +131,7 @@ public partial class MainWindow : Window
         {
             _updateSkipStore.Skip(_availableUpdate.AvailableVersion);
             _availableUpdate = null;
+            ResetReleaseNotes();
             UpdateBanner.Visibility = Visibility.Collapsed;
             SetStatus("Update skipped");
         }
@@ -148,6 +160,8 @@ public partial class MainWindow : Window
                 _lifetimeCancellation.Token);
             UpdateBannerText.Text = "Restarting";
             _updateService.StartWorker(prepared, AppContext.BaseDirectory, Environment.ProcessId);
+            ResetReleaseNotes();
+            UpdateBanner.Visibility = Visibility.Collapsed;
             Close();
         }
         catch (OperationCanceledException) { }
@@ -162,6 +176,7 @@ public partial class MainWindow : Window
 
     private void ShowUpdateFailure()
     {
+        ResetReleaseNotes();
         UpdateBannerText.Text = "Update could not be installed";
         UpdateButton.Visibility = Visibility.Collapsed;
         SkipUpdateButton.Visibility = Visibility.Collapsed;
@@ -449,6 +464,62 @@ public partial class MainWindow : Window
     private static string FormatRetryAfter(TimeSpan retryAfter) => retryAfter.TotalMinutes >= 1
         ? $"{Math.Ceiling(retryAfter.TotalMinutes):0} minutes"
         : $"{Math.Max(1, Math.Ceiling(retryAfter.TotalSeconds)):0} seconds";
+
+    private static string FormatReleaseNotes(string releaseNotes)
+    {
+        const int maximumLength = 480;
+        if (string.IsNullOrWhiteSpace(releaseNotes))
+            return string.Empty;
+
+        var lines = releaseNotes
+            .Replace("\r\n", "\n", StringComparison.Ordinal)
+            .Replace('\r', '\n')
+            .Split('\n');
+        var compactedLines = new List<string>(lines.Length);
+        var previousLineWasBlank = false;
+
+        foreach (var line in lines)
+        {
+            var trimmedLine = line.Trim();
+            if (trimmedLine.Length == 0)
+            {
+                if (compactedLines.Count > 0 && !previousLineWasBlank)
+                    compactedLines.Add(string.Empty);
+                previousLineWasBlank = true;
+                continue;
+            }
+
+            compactedLines.Add(trimmedLine);
+            previousLineWasBlank = false;
+        }
+
+        while (compactedLines.Count > 0 && compactedLines[^1].Length == 0)
+            compactedLines.RemoveAt(compactedLines.Count - 1);
+
+        var normalized = string.Join(Environment.NewLine, compactedLines);
+        return normalized.Length <= maximumLength
+            ? normalized
+            : normalized[..(maximumLength - 3)].TrimEnd() + "...";
+    }
+
+    private void PopulateReleaseNotes(string releaseNotes)
+    {
+        ResetReleaseNotes();
+        var excerpt = FormatReleaseNotes(releaseNotes);
+        if (excerpt.Length == 0)
+            return;
+
+        ReleaseNotesText.Text = excerpt;
+        WhatsNewButton.Visibility = Visibility.Visible;
+    }
+
+    private void ResetReleaseNotes()
+    {
+        ReleaseNotesPanel.Visibility = Visibility.Collapsed;
+        ReleaseNotesText.Text = string.Empty;
+        WhatsNewButton.Content = "What's new";
+        WhatsNewButton.Visibility = Visibility.Collapsed;
+    }
 
     private void Window_MouseLeftButtonDown(object sender, MouseButtonEventArgs e)
     {

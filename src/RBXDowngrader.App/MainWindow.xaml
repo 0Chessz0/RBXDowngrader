@@ -49,17 +49,32 @@
                     Background="#18233A" BorderBrush="#294A7A" BorderThickness="1" CornerRadius="10"
                     Visibility="Collapsed">
                 <Grid>
-                    <Grid.ColumnDefinitions>
-                        <ColumnDefinition Width="*" />
-                        <ColumnDefinition Width="Auto" />
-                        <ColumnDefinition Width="Auto" />
-                    </Grid.ColumnDefinitions>
-                    <TextBlock x:Name="UpdateBannerText" Text="Update available" Foreground="#BFD2FF"
-                               FontSize="11" FontWeight="SemiBold" VerticalAlignment="Center" />
-                    <Button x:Name="SkipUpdateButton" Grid.Column="1" Content="Skip" Style="{StaticResource TextButton}"
-                            Height="32" Margin="8,0,4,0" Click="SkipUpdate_Click" />
-                    <Button x:Name="UpdateButton" Grid.Column="2" Content="Update" Style="{StaticResource SecondaryButton}"
-                            Width="76" Height="32" Margin="14,0,0,0" Click="Update_Click" />
+                    <Grid.RowDefinitions>
+                        <RowDefinition Height="Auto" />
+                        <RowDefinition Height="Auto" />
+                    </Grid.RowDefinitions>
+                    <Grid>
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="*" />
+                            <ColumnDefinition Width="Auto" />
+                            <ColumnDefinition Width="Auto" />
+                        </Grid.ColumnDefinitions>
+                        <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
+                            <TextBlock x:Name="UpdateBannerText" Text="Update available" Foreground="#BFD2FF"
+                                       FontSize="11" FontWeight="SemiBold" VerticalAlignment="Center" />
+                            <Button x:Name="WhatsNewButton" Content="What's new" Style="{StaticResource TextButton}"
+                                    Height="28" Margin="8,0,0,0" Visibility="Collapsed" Click="WhatsNew_Click" />
+                        </StackPanel>
+                        <Button x:Name="SkipUpdateButton" Grid.Column="1" Content="Skip" Style="{StaticResource TextButton}"
+                                Height="32" Margin="8,0,4,0" Click="SkipUpdate_Click" />
+                        <Button x:Name="UpdateButton" Grid.Column="2" Content="Update" Style="{StaticResource SecondaryButton}"
+                                Width="76" Height="32" Margin="14,0,0,0" Click="Update_Click" />
+                    </Grid>
+                    <Border x:Name="ReleaseNotesPanel" Grid.Row="1" Margin="0,7,0,3" Padding="10,8"
+                            Background="#111A2C" CornerRadius="7" Visibility="Collapsed">
+                        <TextBlock x:Name="ReleaseNotesText" Foreground="#A9BCE2" FontSize="11"
+                                   LineHeight="17" TextWrapping="Wrap" />
+                    </Border>
                 </Grid>
             </Border>
 

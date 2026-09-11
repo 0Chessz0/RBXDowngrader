@@ -16,7 +16,7 @@ public sealed class UpdateServiceTests
         var hash = Convert.ToHexString(SHA256.HashData(package)).ToLowerInvariant();
         var assetName = $"RBXDowngraderSetup-{RuntimeIdentifier()}.exe";
         var releaseJson = $$"""
-            {"tag_name":"v9.0.0","assets":[{"name":"{{assetName}}","browser_download_url":"https://example.com/update.zip","size":{{package.Length}},"digest":"sha256:{{hash}}"}]}
+            {"tag_name":"v9.0.0","body":"## Highlights\n\n- Faster updates\n- Clearer status","assets":[{"name":"{{assetName}}","browser_download_url":"https://example.com/update.zip","size":{{package.Length}},"digest":"sha256:{{hash}}"}]}
             """;
         using var client = new HttpClient(new DelegateHttpHandler((request, _) =>
             Task.FromResult(request.RequestUri!.Host == "api.github.com"
@@ -32,6 +32,7 @@ public sealed class UpdateServiceTests
         var prepared = await service.PrepareAsync(Assert.IsType<UpdateRelease>(release));
 
         Assert.Equal(new Version(9, 0, 0), prepared.Release.AvailableVersion);
+        Assert.Equal("## Highlights\n\n- Faster updates\n- Clearer status", prepared.Release.ReleaseNotes);
         Assert.True(File.Exists(Path.Combine(prepared.PayloadDirectory, "RBXDowngrader.exe")));
         Assert.True(File.Exists(Path.Combine(prepared.PayloadDirectory, "uninstall.exe")));
     }
@@ -50,7 +51,8 @@ public sealed class UpdateServiceTests
             "RBXDowngraderSetup-win-x64.exe",
             new Uri("https://example.com/update.zip"),
             package.Length,
-            new string('0', 64));
+            new string('0', 64),
+            string.Empty);
 
         var exception = await Assert.ThrowsAsync<InvalidDataException>(() => service.PrepareAsync(release));
 
@@ -76,7 +78,8 @@ public sealed class UpdateServiceTests
             "RBXDowngraderSetup-win-x64.exe",
             new Uri("https://example.com/setup.exe"),
             installerBytes.Length,
-            hash);
+            hash,
+            string.Empty);
 
         await Assert.ThrowsAsync<InvalidDataException>(() => service.PrepareAsync(release));
     }

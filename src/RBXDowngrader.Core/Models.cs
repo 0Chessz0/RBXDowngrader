@@ -53,7 +53,8 @@ public sealed record UpdateRelease(
     string AssetName,
     Uri AssetUri,
     long AssetSize,
-    string Sha256);
+    string Sha256,
+    string ReleaseNotes);
 
 public sealed record PreparedUpdate(
     UpdateRelease Release,
