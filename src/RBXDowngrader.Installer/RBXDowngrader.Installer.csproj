@@ -1,0 +1,14 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <OutputType>WinExe</OutputType>
+    <TargetFramework>net8.0-windows</TargetFramework>
+    <UseWPF>true</UseWPF>
+    <AssemblyName>RBXDowngraderSetup</AssemblyName>
+    <RootNamespace>RBXDowngrader.Installer</RootNamespace>
+    <ApplicationIcon>app.ico</ApplicationIcon>
+  </PropertyGroup>
+  <ItemGroup>
+    <Resource Include="app-icon.png" />
+    <EmbeddedResource Include="Payload.zip" Condition="Exists('Payload.zip')" LogicalName="RBXDowngrader.Payload.zip" />
+  </ItemGroup>
+</Project>

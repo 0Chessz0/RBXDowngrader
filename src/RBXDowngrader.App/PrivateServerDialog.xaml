@@ -1,0 +1,35 @@
+<Window x:Class="RBXDowngrader.PrivateServerDialog"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        Width="500" Height="280" WindowStyle="None" AllowsTransparency="True" Background="Transparent"
+        ResizeMode="NoResize" WindowStartupLocation="CenterOwner" ShowInTaskbar="False"
+        Loaded="Window_Loaded" MouseLeftButtonDown="Window_MouseLeftButtonDown">
+    <Border Margin="16" CornerRadius="18" Background="#151515" BorderBrush="#303030" BorderThickness="1" Padding="26">
+        <Border.Effect>
+            <DropShadowEffect Color="#000000" BlurRadius="24" ShadowDepth="7" Opacity="0.7" />
+        </Border.Effect>
+        <Grid>
+            <Grid.RowDefinitions>
+                <RowDefinition Height="Auto" />
+                <RowDefinition Height="Auto" />
+                <RowDefinition Height="Auto" />
+                <RowDefinition Height="*" />
+                <RowDefinition Height="42" />
+            </Grid.RowDefinitions>
+            <TextBlock Text="Private server" FontFamily="Segoe UI Variable Display, Segoe UI" FontSize="18" FontWeight="SemiBold" />
+            <TextBlock Grid.Row="1" Text="PRIVATE SERVER LINK" Foreground="#777777" FontSize="9" FontWeight="SemiBold" Margin="2,19,0,7" />
+            <Border Grid.Row="2" Height="44" Background="#1A1A1A" BorderBrush="#303030" BorderThickness="1" CornerRadius="10">
+                <TextBox x:Name="LinkInput" Background="Transparent" BorderThickness="0" Foreground="#F1F1F1"
+                         CaretBrush="#477CE8" FontFamily="Cascadia Mono, Consolas" FontSize="11"
+                         VerticalContentAlignment="Center" Padding="12,0" TextChanged="LinkInput_TextChanged"
+                         KeyDown="LinkInput_KeyDown" />
+            </Border>
+            <TextBlock x:Name="ValidationText" Grid.Row="3" Text="Enter a valid roblox.com private server link"
+                       Foreground="#FF6F6F" FontSize="10" Margin="2,7,0,0" Visibility="Collapsed" />
+            <StackPanel Grid.Row="4" Orientation="Horizontal" HorizontalAlignment="Right">
+                <Button Content="Cancel" Style="{StaticResource SecondaryButton}" Width="80" Height="42" Click="Cancel_Click" />
+                <Button Content="Launch" Style="{StaticResource PrimaryButton}" Width="92" Height="42" Margin="8,0,0,0" Click="Launch_Click" />
+            </StackPanel>
+        </Grid>
+    </Border>
+</Window>

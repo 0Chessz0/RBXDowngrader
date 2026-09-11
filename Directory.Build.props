@@ -1,0 +1,12 @@
+<Project>
+  <PropertyGroup>
+    <LangVersion>latest</LangVersion>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <TreatWarningsAsErrors>true</TreatWarningsAsErrors>
+    <NuGetAudit>false</NuGetAudit>
+    <Version>1.1.0</Version>
+    <Company>RBXDowngrader</Company>
+    <Copyright>Copyright © 2026</Copyright>
+  </PropertyGroup>
+</Project>

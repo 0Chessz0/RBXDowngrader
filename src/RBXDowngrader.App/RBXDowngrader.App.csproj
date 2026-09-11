@@ -1,0 +1,14 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <OutputType>WinExe</OutputType>
+    <TargetFramework>net8.0-windows</TargetFramework>
+    <UseWPF>true</UseWPF>
+    <AssemblyName>RBXDowngrader</AssemblyName>
+    <RootNamespace>RBXDowngrader</RootNamespace>
+    <ApplicationIcon>Assets\app.ico</ApplicationIcon>
+  </PropertyGroup>
+  <ItemGroup>
+    <ProjectReference Include="..\RBXDowngrader.Core\RBXDowngrader.Core.csproj" />
+    <Resource Include="Assets\app-icon.png" />
+  </ItemGroup>
+</Project>

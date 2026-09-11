@@ -1,0 +1,43 @@
+
+Microsoft Visual Studio Solution File, Format Version 12.00
+# Visual Studio Version 17
+VisualStudioVersion = 17.0.31903.59
+MinimumVisualStudioVersion = 10.0.40219.1
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "RBXDowngrader.Core", "src\RBXDowngrader.Core\RBXDowngrader.Core.csproj", "{3691207D-43EA-433A-BE13-F2920F3CD43B}"
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "RBXDowngrader.App", "src\RBXDowngrader.App\RBXDowngrader.App.csproj", "{FFBB1073-0D2E-4E18-BB05-39FA4B94C89C}"
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "RBXDowngrader.Installer", "src\RBXDowngrader.Installer\RBXDowngrader.Installer.csproj", "{39341A82-A270-4271-8C92-9971C0ED77D4}"
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "RBXDowngrader.Uninstaller", "src\RBXDowngrader.Uninstaller\RBXDowngrader.Uninstaller.csproj", "{EF491449-492E-4B92-AD88-CFD84BF35E65}"
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "RBXDowngrader.Core.Tests", "tests\RBXDowngrader.Core.Tests\RBXDowngrader.Core.Tests.csproj", "{BA377B64-C4AA-4930-8B13-6C35B7AE9FB4}"
+EndProject
+Global
+	GlobalSection(SolutionConfigurationPlatforms) = preSolution
+		Debug|Any CPU = Debug|Any CPU
+		Release|Any CPU = Release|Any CPU
+	EndGlobalSection
+	GlobalSection(ProjectConfigurationPlatforms) = postSolution
+		{3691207D-43EA-433A-BE13-F2920F3CD43B}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{3691207D-43EA-433A-BE13-F2920F3CD43B}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{3691207D-43EA-433A-BE13-F2920F3CD43B}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{3691207D-43EA-433A-BE13-F2920F3CD43B}.Release|Any CPU.Build.0 = Release|Any CPU
+		{FFBB1073-0D2E-4E18-BB05-39FA4B94C89C}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{FFBB1073-0D2E-4E18-BB05-39FA4B94C89C}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{FFBB1073-0D2E-4E18-BB05-39FA4B94C89C}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{FFBB1073-0D2E-4E18-BB05-39FA4B94C89C}.Release|Any CPU.Build.0 = Release|Any CPU
+		{39341A82-A270-4271-8C92-9971C0ED77D4}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{39341A82-A270-4271-8C92-9971C0ED77D4}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{39341A82-A270-4271-8C92-9971C0ED77D4}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{39341A82-A270-4271-8C92-9971C0ED77D4}.Release|Any CPU.Build.0 = Release|Any CPU
+		{EF491449-492E-4B92-AD88-CFD84BF35E65}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{EF491449-492E-4B92-AD88-CFD84BF35E65}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{EF491449-492E-4B92-AD88-CFD84BF35E65}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{EF491449-492E-4B92-AD88-CFD84BF35E65}.Release|Any CPU.Build.0 = Release|Any CPU
+		{BA377B64-C4AA-4930-8B13-6C35B7AE9FB4}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{BA377B64-C4AA-4930-8B13-6C35B7AE9FB4}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{BA377B64-C4AA-4930-8B13-6C35B7AE9FB4}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{BA377B64-C4AA-4930-8B13-6C35B7AE9FB4}.Release|Any CPU.Build.0 = Release|Any CPU
+	EndGlobalSection
+EndGlobal
