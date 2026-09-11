@@ -13,6 +13,7 @@ A small native Windows launcher for downloading, keeping, and launching Roblox p
 - Supports custom names and total installed disk usage
 - Launches versions or removes them instantly with silent background cleanup
 - Opens Roblox private-server share links in any selected installed version
+- Offers user-initiated in-place updates from verified GitHub Release assets
 - Includes current-user and all-user installation, custom install paths, Start Menu registration, and a custom uninstaller
 
 The uninstaller removes both the selected program directory and `%APPDATA%\RBXDowngrader`. Selecting **Keep downloaded Roblox versions** preserves only the `robloxversions` folder.
@@ -23,11 +24,15 @@ Requirements: Windows 10 or 11, PowerShell, and the .NET 8 SDK.
 
 ```powershell
 dotnet build RBXDowngrader.sln -m:1
-dotnet run --project tests\RBXDowngrader.Core.Tests
+dotnet test tests\RBXDowngrader.Core.Tests
 .\build-installer.ps1
 ```
 
-The packaged installer is written to `artifacts\RBXDowngraderSetup.exe`. It is self-contained and installs without administrator access. The local `artifacts` folder is intentionally ignored by Git; attach the EXE directly to a GitHub release.
+The packaging script writes `artifacts\RBXDowngraderSetup.exe` and `artifacts\RBXDowngraderUpdate-win-x64.zip`. The installer is self-contained and installs without administrator access. The local `artifacts` folder is intentionally ignored by Git; attach both files directly to a GitHub release. The update ZIP name must remain unchanged so installed copies can find it.
+
+Update downloads are checked against the size and SHA-256 digest supplied by GitHub before extraction. Updates replace only files listed in the packaged application-file manifest. Downloaded Roblox versions, custom names, caches, settings, and logs are not part of that manifest and remain untouched.
+
+Roblox package MD5 values are used as the deployment manifest's integrity check over HTTPS. They are not digital signatures and do not independently prove package authenticity.
 
 The recent-build picker reads a five-item Windows history response from the public [RBXOffsets API](https://rbxoffsets.com/documents/api). Packages are still downloaded directly from Roblox deployment servers.
 

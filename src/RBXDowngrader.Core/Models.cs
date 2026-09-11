@@ -45,6 +45,21 @@ public sealed record RecentBuild(
     public string StatusText => IsCurrent ? "CURRENT" : string.Empty;
 }
 
+public sealed record RecentBuildResult(IReadOnlyList<RecentBuild> Builds, bool IsCached);
+
+public sealed record UpdateRelease(
+    Version AvailableVersion,
+    string TagName,
+    string AssetName,
+    Uri AssetUri,
+    long AssetSize,
+    string Sha256);
+
+public sealed record PreparedUpdate(
+    UpdateRelease Release,
+    string UpdateRoot,
+    string PayloadDirectory);
+
 public sealed record DownloadProgress(
     string Status,
     double Percentage,

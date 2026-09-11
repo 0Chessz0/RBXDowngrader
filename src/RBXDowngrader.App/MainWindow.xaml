@@ -17,6 +17,7 @@
             <Grid.RowDefinitions>
                 <RowDefinition Height="64" />
                 <RowDefinition Height="Auto" />
+                <RowDefinition Height="Auto" />
                 <RowDefinition Height="*" />
                 <RowDefinition Height="60" />
             </Grid.RowDefinitions>
@@ -44,7 +45,22 @@
                 </StackPanel>
             </Grid>
 
-            <Grid Grid.Row="1" Margin="34,20,34,26">
+            <Border x:Name="UpdateBanner" Grid.Row="1" Margin="34,0,34,6" Padding="14,7"
+                    Background="#18233A" BorderBrush="#294A7A" BorderThickness="1" CornerRadius="10"
+                    Visibility="Collapsed">
+                <Grid>
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="*" />
+                        <ColumnDefinition Width="Auto" />
+                    </Grid.ColumnDefinitions>
+                    <TextBlock x:Name="UpdateBannerText" Text="Update available" Foreground="#BFD2FF"
+                               FontSize="11" FontWeight="SemiBold" VerticalAlignment="Center" />
+                    <Button x:Name="UpdateButton" Grid.Column="1" Content="Update" Style="{StaticResource SecondaryButton}"
+                            Width="76" Height="32" Margin="14,0,0,0" Click="Update_Click" />
+                </Grid>
+            </Border>
+
+            <Grid Grid.Row="2" Margin="34,14,34,26">
                 <Grid.ColumnDefinitions>
                     <ColumnDefinition Width="*" />
                     <ColumnDefinition Width="8" />
@@ -80,9 +96,15 @@
                                 <DropShadowEffect Color="#000000" BlurRadius="22" ShadowDepth="7" Opacity="0.7" />
                             </Border.Effect>
                             <Grid>
+                                <Grid.RowDefinitions>
+                                    <RowDefinition Height="Auto" />
+                                    <RowDefinition Height="*" />
+                                </Grid.RowDefinitions>
                                 <TextBlock x:Name="RecentBuildsState" Text="Loading" Foreground="{StaticResource MutedBrush}"
-                                           FontSize="11" Margin="12,14" />
-                                <ItemsControl x:Name="RecentBuildsList" ItemsSource="{Binding RecentBuilds}" Visibility="Collapsed">
+                                           FontSize="11" Margin="12,14" Grid.RowSpan="2" />
+                                <TextBlock x:Name="CachedResultsText" Text="Showing cached results" Foreground="#8A8A8A"
+                                           FontSize="10" Margin="11,7,11,3" Visibility="Collapsed" />
+                                <ItemsControl x:Name="RecentBuildsList" Grid.Row="1" ItemsSource="{Binding RecentBuilds}" Visibility="Collapsed">
                                     <ItemsControl.ItemTemplate>
                                         <DataTemplate>
                                             <Button Background="Transparent" BorderThickness="0" Padding="11,9" Cursor="Hand"
@@ -125,7 +147,7 @@
                         Content="Download" IsEnabled="False" Click="Download_Click" />
             </Grid>
 
-            <Grid Grid.Row="2" Margin="34,0,34,0">
+            <Grid Grid.Row="3" Margin="34,0,34,0">
                 <Grid.RowDefinitions>
                     <RowDefinition Height="32" />
                     <RowDefinition Height="*" />
@@ -212,7 +234,7 @@
                 </Grid>
             </Grid>
 
-            <Grid Grid.Row="3" Margin="34,12,34,18">
+            <Grid Grid.Row="4" Margin="34,12,34,18">
                 <Grid.ColumnDefinitions>
                     <ColumnDefinition Width="*" />
                     <ColumnDefinition Width="Auto" />

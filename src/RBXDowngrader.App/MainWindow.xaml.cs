@@ -13,17 +13,23 @@ public partial class MainWindow : Window
     private readonly VersionStore _store = new();
     private readonly RobloxDownloadService _downloader = new();
     private readonly RecentBuildService _recentBuildService = new();
+    private readonly UpdateService _updateService = new();
     private CancellationTokenSource? _downloadCancellation;
+    private readonly CancellationTokenSource _lifetimeCancellation = new();
     private bool _isBusy;
     private bool _isLoadingRecentBuilds;
+    private bool _isUpdating;
+    private readonly bool _showUpdateFailure;
+    private UpdateRelease? _availableUpdate;
 
     public ObservableCollection<InstalledVersion> Versions { get; } = [];
     public ObservableCollection<RecentBuild> RecentBuilds { get; } = [];
 
-    public MainWindow()
+    public MainWindow(bool showUpdateFailure = false)
     {
         InitializeComponent();
         DataContext = this;
+        _showUpdateFailure = showUpdateFailure;
     }
 
     private async void Window_Loaded(object sender, RoutedEventArgs e)
@@ -32,6 +38,71 @@ public partial class MainWindow : Window
         await RefreshVersionsAsync();
         TryPrefillVersionFromClipboard();
         VersionInput.Focus();
+        if (_showUpdateFailure)
+            ShowUpdateFailure();
+        else
+            _ = CheckForUpdatesAsync();
+    }
+
+    private async Task CheckForUpdatesAsync()
+    {
+        if (!File.Exists(Path.Combine(AppContext.BaseDirectory, ".install-scope")))
+            return;
+
+        try
+        {
+            _availableUpdate = await _updateService.CheckAsync(_lifetimeCancellation.Token);
+            if (_availableUpdate is null)
+                return;
+
+            UpdateBannerText.Text = $"RBXDowngrader {_availableUpdate.AvailableVersion.ToString(3)} is available";
+            UpdateButton.Content = "Update";
+            UpdateButton.IsEnabled = true;
+            UpdateBanner.Visibility = Visibility.Visible;
+        }
+        catch (OperationCanceledException) { }
+        catch
+        {
+            // Update checks never interrupt normal app use.
+        }
+    }
+
+    private async void Update_Click(object sender, RoutedEventArgs e)
+    {
+        if (_availableUpdate is null || _isUpdating)
+            return;
+
+        _isUpdating = true;
+        UpdateButton.IsEnabled = false;
+        UpdateBannerText.Text = "Downloading update";
+        var progress = new Progress<double>(percentage =>
+            UpdateBannerText.Text = $"Downloading update  {percentage:0}%");
+
+        try
+        {
+            var prepared = await _updateService.PrepareAsync(
+                _availableUpdate,
+                progress,
+                _lifetimeCancellation.Token);
+            UpdateBannerText.Text = "Restarting";
+            _updateService.StartWorker(prepared, AppContext.BaseDirectory, Environment.ProcessId);
+            Close();
+        }
+        catch (OperationCanceledException) { }
+        catch
+        {
+            UpdateBannerText.Text = "Update could not be downloaded";
+            UpdateButton.Content = "Retry";
+            UpdateButton.IsEnabled = true;
+            _isUpdating = false;
+        }
+    }
+
+    private void ShowUpdateFailure()
+    {
+        UpdateBannerText.Text = "Update could not be installed";
+        UpdateButton.Visibility = Visibility.Collapsed;
+        UpdateBanner.Visibility = Visibility.Visible;
     }
 
     private async Task RefreshVersionsAsync()
@@ -183,13 +254,14 @@ public partial class MainWindow : Window
         _isLoadingRecentBuilds = true;
         RecentBuilds.Clear();
         RecentBuildsList.Visibility = Visibility.Collapsed;
+        CachedResultsText.Visibility = Visibility.Collapsed;
         RecentBuildsState.Text = "Loading";
         RecentBuildsState.Visibility = Visibility.Visible;
 
         try
         {
-            var builds = await _recentBuildService.GetLatestAsync();
-            foreach (var build in builds)
+            var result = await _recentBuildService.GetLatestAsync();
+            foreach (var build in result.Builds)
                 RecentBuilds.Add(build);
 
             if (RecentBuilds.Count == 0)
@@ -199,6 +271,7 @@ public partial class MainWindow : Window
             else
             {
                 RecentBuildsState.Visibility = Visibility.Collapsed;
+                CachedResultsText.Visibility = result.IsCached ? Visibility.Visible : Visibility.Collapsed;
                 RecentBuildsList.Visibility = Visibility.Visible;
             }
         }
@@ -321,8 +394,11 @@ public partial class MainWindow : Window
     protected override void OnClosed(EventArgs e)
     {
         _downloadCancellation?.Cancel();
+        _lifetimeCancellation.Cancel();
         _downloader.Dispose();
         _recentBuildService.Dispose();
+        _updateService.Dispose();
+        _lifetimeCancellation.Dispose();
         base.OnClosed(e);
     }
 }

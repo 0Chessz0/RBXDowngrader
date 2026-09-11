@@ -6,19 +6,49 @@ namespace RBXDowngrader.Core;
 
 public sealed class RobloxDownloadService : IDisposable
 {
+    private const int MaxPackageDownloadAttempts = 3;
+    private static readonly TimeSpan InitialRetryDelay = TimeSpan.FromMilliseconds(500);
+    private static readonly TimeSpan MaximumRetryDelay = TimeSpan.FromSeconds(2);
     private readonly HttpClient _httpClient;
     private readonly bool _ownsClient;
+    private readonly string _versionsDirectory;
+    private readonly string _tempDirectory;
+    private readonly string _logFile;
 
     public RobloxDownloadService(HttpClient? httpClient = null)
+        : this(
+            httpClient ?? new HttpClient(CreateDefaultHandler()),
+            ownsClient: httpClient is null,
+            AppPaths.Versions,
+            AppPaths.Temp,
+            AppPaths.LogFile)
     {
-        _ownsClient = httpClient is null;
-        _httpClient = httpClient ?? new HttpClient(new SocketsHttpHandler
-        {
-            AutomaticDecompression = DecompressionMethods.All,
-            PooledConnectionLifetime = TimeSpan.FromMinutes(5)
-        });
+    }
+
+    public RobloxDownloadService(HttpMessageHandler handler, string storageRoot)
+        : this(
+            new HttpClient(handler ?? throw new ArgumentNullException(nameof(handler))),
+            ownsClient: true,
+            Path.Combine(storageRoot, "robloxversions"),
+            Path.Combine(storageRoot, "temp"),
+            Path.Combine(storageRoot, "RBXDowngrader.log"))
+    {
+    }
+
+    private RobloxDownloadService(
+        HttpClient httpClient,
+        bool ownsClient,
+        string versionsDirectory,
+        string tempDirectory,
+        string logFile)
+    {
+        _ownsClient = ownsClient;
+        _httpClient = httpClient;
+        _versionsDirectory = versionsDirectory;
+        _tempDirectory = tempDirectory;
+        _logFile = logFile;
         _httpClient.Timeout = TimeSpan.FromMinutes(30);
-        _httpClient.DefaultRequestHeaders.UserAgent.ParseAdd("RBXDowngrader/1.0");
+        _httpClient.DefaultRequestHeaders.UserAgent.ParseAdd(AppIdentity.UserAgent);
     }
 
     public async Task<string> DownloadAsync(
@@ -29,12 +59,13 @@ public sealed class RobloxDownloadService : IDisposable
         if (!VersionHash.TryNormalize(versionInput, out var version))
             throw new ArgumentException("Enter a valid 16 character Roblox version hash.", nameof(versionInput));
 
-        AppPaths.EnsureCreated();
-        var destination = Path.Combine(AppPaths.Versions, version);
+        Directory.CreateDirectory(_versionsDirectory);
+        Directory.CreateDirectory(_tempDirectory);
+        var destination = Path.Combine(_versionsDirectory, version);
         if (Directory.Exists(destination))
             throw new InvalidOperationException("That version is already installed.");
 
-        var staging = Path.Combine(AppPaths.Temp, $"{version}-{Guid.NewGuid():N}");
+        var staging = Path.Combine(_tempDirectory, $"{version}-{Guid.NewGuid():N}");
         var downloads = Path.Combine(staging, "packages");
         var assembled = Path.Combine(staging, "assembled");
         Directory.CreateDirectory(downloads);
@@ -60,10 +91,11 @@ public sealed class RobloxDownloadService : IDisposable
                 try
                 {
                     var path = Path.Combine(downloads, package.Name);
-                    await DownloadPackageAsync(
+                    await DownloadPackageWithRetryAsync(
                         new Uri(baseUri, $"{version}-{package.Name}"),
                         path,
                         package.Checksum,
+                        package.Name,
                         bytes =>
                         {
                             var total = Interlocked.Add(ref receivedBytes, bytes);
@@ -73,6 +105,7 @@ public sealed class RobloxDownloadService : IDisposable
                             progress?.Report(new DownloadProgress(
                                 $"Downloading {package.Name}", percentage, total, expectedBytes));
                         },
+                        progress,
                         cancellationToken).ConfigureAwait(false);
                     completed[package.Name] = path;
                 }
@@ -168,7 +201,7 @@ public sealed class RobloxDownloadService : IDisposable
         Uri uri,
         string destination,
         string checksum,
-        Action<int> reportBytes,
+        Action<long> reportBytes,
         CancellationToken cancellationToken)
     {
         using var response = await _httpClient.GetAsync(
@@ -190,6 +223,8 @@ public sealed class RobloxDownloadService : IDisposable
 
         if (checksum.Length == 32 && checksum.All(Uri.IsHexDigit))
         {
+            // The MD5 value comes from Roblox's deployment manifest and checks package
+            // integrity over HTTPS. It is not a digital signature or publisher-authenticity proof.
             await using var file = File.OpenRead(destination);
             var actual = Convert.ToHexString(await MD5.HashDataAsync(file, cancellationToken).ConfigureAwait(false));
             if (!actual.Equals(checksum, StringComparison.OrdinalIgnoreCase))
@@ -197,19 +232,84 @@ public sealed class RobloxDownloadService : IDisposable
         }
     }
 
-    private static async Task AppendLogAsync(string version, Exception exception)
+    private async Task DownloadPackageWithRetryAsync(
+        Uri uri,
+        string destination,
+        string checksum,
+        string packageName,
+        Action<long> reportBytes,
+        IProgress<DownloadProgress>? progress,
+        CancellationToken cancellationToken)
+    {
+        var retryDelay = InitialRetryDelay;
+        for (var attempt = 1; attempt <= MaxPackageDownloadAttempts; attempt++)
+        {
+            long attemptBytes = 0;
+            try
+            {
+                await DownloadPackageAsync(
+                    uri,
+                    destination,
+                    checksum,
+                    bytes =>
+                    {
+                        attemptBytes += bytes;
+                        reportBytes(bytes);
+                    },
+                    cancellationToken).ConfigureAwait(false);
+                return;
+            }
+            catch (Exception ex) when (IsTransientDownloadFailure(ex, cancellationToken))
+            {
+                if (attemptBytes > 0)
+                    reportBytes(-attemptBytes);
+                TryDeletePartialDownload(destination);
+
+                if (attempt == MaxPackageDownloadAttempts)
+                    throw;
+
+                progress?.Report(new DownloadProgress(
+                    $"Retrying {packageName}", 0));
+                await Task.Delay(retryDelay, cancellationToken).ConfigureAwait(false);
+                retryDelay = TimeSpan.FromMilliseconds(Math.Min(
+                    retryDelay.TotalMilliseconds * 2,
+                    MaximumRetryDelay.TotalMilliseconds));
+            }
+        }
+    }
+
+    private static bool IsTransientDownloadFailure(Exception exception, CancellationToken cancellationToken) =>
+        exception is HttpRequestException or IOException or TimeoutException
+        || (exception is TaskCanceledException && !cancellationToken.IsCancellationRequested);
+
+    private static void TryDeletePartialDownload(string path)
+    {
+        try { File.Delete(path); }
+        catch (IOException) { }
+        catch (UnauthorizedAccessException) { }
+    }
+
+    private async Task AppendLogAsync(string version, Exception exception)
     {
         try
         {
-            Directory.CreateDirectory(AppPaths.Root);
+            var logDirectory = Path.GetDirectoryName(_logFile);
+            if (!string.IsNullOrWhiteSpace(logDirectory))
+                Directory.CreateDirectory(logDirectory);
             await File.AppendAllTextAsync(
-                AppPaths.LogFile,
+                _logFile,
                 $"[{DateTimeOffset.Now:O}] {version}{Environment.NewLine}{exception}{Environment.NewLine}{Environment.NewLine}")
                 .ConfigureAwait(false);
         }
         catch (IOException) { }
         catch (UnauthorizedAccessException) { }
     }
+
+    private static HttpMessageHandler CreateDefaultHandler() => new SocketsHttpHandler
+    {
+        AutomaticDecompression = DecompressionMethods.All,
+        PooledConnectionLifetime = TimeSpan.FromMinutes(5)
+    };
 
     public void Dispose()
     {

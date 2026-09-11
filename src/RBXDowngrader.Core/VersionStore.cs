@@ -200,6 +200,9 @@ public sealed class VersionStore
 
     private static void StartDeleteWorker(string target)
     {
+        // Recursive deletion can be blocked by Roblox or antivirus file locks. Relaunching
+        // this executable as a worker lets the main window close immediately and keeps retrying
+        // independently after the user exits the launcher, without holding UI state in memory.
         var executable = Environment.ProcessPath;
         if (string.IsNullOrWhiteSpace(executable) || !File.Exists(executable))
             throw new InvalidOperationException("Could not start the background delete worker.");

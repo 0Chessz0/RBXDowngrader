@@ -147,7 +147,8 @@ public partial class MainWindow : Window
         using var key = registry.CreateSubKey(
             @"Software\Microsoft\Windows\CurrentVersion\Uninstall\RBXDowngrader", writable: true);
         key.SetValue("DisplayName", "RBXDowngrader");
-        key.SetValue("DisplayVersion", "1.1.0");
+        var version = Assembly.GetExecutingAssembly().GetName().Version?.ToString(3) ?? "0.0.0";
+        key.SetValue("DisplayVersion", version);
         key.SetValue("Publisher", "RBXDowngrader");
         key.SetValue("InstallLocation", _installDirectory);
         key.SetValue("DisplayIcon", appPath);
