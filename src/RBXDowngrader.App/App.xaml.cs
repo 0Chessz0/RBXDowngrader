@@ -64,9 +64,27 @@ public partial class App : Application
         var updateFailed = e.Args.Contains(UpdateWorker.FailedArgument, StringComparer.OrdinalIgnoreCase);
 
         ShutdownMode = ShutdownMode.OnMainWindowClose;
-        var window = new MainWindow(updateFailed);
-        MainWindow = window;
-        window.Show();
+        try
+        {
+            var window = new MainWindow(updateFailed);
+            MainWindow = window;
+            window.Show();
+        }
+        catch (Exception ex)
+        {
+            var cause = ex;
+            while (cause.InnerException is not null)
+                cause = cause.InnerException;
+
+            MessageBox.Show(
+                $"RBXDowngrader could not start.\n\n{cause.Message}",
+                "RBXDowngrader",
+                MessageBoxButton.OK,
+                MessageBoxImage.Error);
+            Shutdown();
+            return;
+        }
+
         _activationListener = ListenForActivationAsync(_activationCancellation.Token);
         if (cleanupArguments is { } cleanup)
             _ = CleanupUpdateAsync(cleanup.UpdateRoot, cleanup.BackupRoot);
