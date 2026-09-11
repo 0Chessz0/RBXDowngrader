@@ -47,6 +47,72 @@ public sealed class ModelTests
     }
 }
 
+public sealed class UpdateCheckThrottleTests
+{
+    [Fact]
+    public void AllowsTwentyChecksAndBlocksTheTwentyFirst()
+    {
+        using var temporary = new TemporaryDirectory();
+        var clock = new TestTimeProvider(DateTimeOffset.UtcNow);
+        var throttle = new UpdateCheckThrottle(Path.Combine(temporary.Path, "checks.json"), clock);
+
+        for (var i = 0; i < UpdateCheckThrottle.MaxChecksPerWindow; i++)
+            Assert.True(throttle.TryAcquire(out _));
+
+        Assert.False(throttle.TryAcquire(out var retryAfter));
+        Assert.True(retryAfter > TimeSpan.Zero);
+    }
+
+    [Fact]
+    public void ExpiresChecksAfterTheRollingWindow()
+    {
+        using var temporary = new TemporaryDirectory();
+        var clock = new TestTimeProvider(DateTimeOffset.UtcNow);
+        var throttle = new UpdateCheckThrottle(Path.Combine(temporary.Path, "checks.json"), clock);
+
+        for (var i = 0; i < UpdateCheckThrottle.MaxChecksPerWindow; i++)
+            Assert.True(throttle.TryAcquire(out _));
+
+        clock.Advance(UpdateCheckThrottle.Window + TimeSpan.FromSeconds(1));
+
+        Assert.True(throttle.TryAcquire(out _));
+    }
+}
+
+public sealed class UpdateSkipStoreTests
+{
+    [Fact]
+    public void SkipsTheSavedVersionAndOlderVersions()
+    {
+        using var temporary = new TemporaryDirectory();
+        var store = new UpdateSkipStore(Path.Combine(temporary.Path, "skipped.txt"));
+
+        store.Skip(new Version(2, 0, 0));
+
+        Assert.True(store.IsSkipped(new Version(2, 0, 0)));
+        Assert.True(store.IsSkipped(new Version(1, 9, 0)));
+        Assert.False(store.IsSkipped(new Version(2, 1, 0)));
+    }
+}
+
+public sealed class ApplicationDataPathRulesTests
+{
+    [Theory]
+    [InlineData("robloxversions", true)]
+    [InlineData("temp", true)]
+    [InlineData("RBXDowngrader.log", false)]
+    [InlineData("recent-builds-cache.json", false)]
+    [InlineData("update-checks.json", false)]
+    public void AllowsKnownDataLeftovers(string path, bool isDirectory) =>
+        Assert.True(ApplicationDataPathRules.IsAllowedExistingEntry(path, isDirectory));
+
+    [Theory]
+    [InlineData("other-folder", true)]
+    [InlineData("unknown.txt", false)]
+    public void BlocksUnknownInstallDirectoryEntries(string path, bool isDirectory) =>
+        Assert.False(ApplicationDataPathRules.IsAllowedExistingEntry(path, isDirectory));
+}
+
 public sealed class RecentBuildServiceTests
 {
     private const string HistoryJson = """

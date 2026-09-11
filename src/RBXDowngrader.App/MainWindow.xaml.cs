@@ -14,10 +14,13 @@ public partial class MainWindow : Window
     private readonly RobloxDownloadService _downloader = new();
     private readonly RecentBuildService _recentBuildService = new();
     private readonly UpdateService _updateService = new();
+    private readonly UpdateCheckThrottle _updateCheckThrottle = new();
+    private readonly UpdateSkipStore _updateSkipStore = new();
     private CancellationTokenSource? _downloadCancellation;
     private readonly CancellationTokenSource _lifetimeCancellation = new();
     private bool _isBusy;
     private bool _isLoadingRecentBuilds;
+    private bool _isCheckingForUpdates;
     private bool _isUpdating;
     private readonly bool _showUpdateFailure;
     private UpdateRelease? _availableUpdate;
@@ -30,6 +33,7 @@ public partial class MainWindow : Window
         InitializeComponent();
         DataContext = this;
         _showUpdateFailure = showUpdateFailure;
+        VersionLabel.Text = $"v{AppIdentity.Version.ToString(3)}";
     }
 
     private async void Window_Loaded(object sender, RoutedEventArgs e)
@@ -41,29 +45,87 @@ public partial class MainWindow : Window
         if (_showUpdateFailure)
             ShowUpdateFailure();
         else
-            _ = CheckForUpdatesAsync();
+            _ = CheckForUpdatesAsync(manual: false);
     }
 
-    private async Task CheckForUpdatesAsync()
+    private async Task CheckForUpdatesAsync(bool manual)
     {
         if (!File.Exists(Path.Combine(AppContext.BaseDirectory, ".install-scope")))
+        {
+            if (manual)
+                SetStatus("Updates are available for installed copies", isError: true);
+            return;
+        }
+
+        if (_isCheckingForUpdates)
             return;
 
+        if (!_updateCheckThrottle.TryAcquire(out var retryAfter))
+        {
+            if (manual)
+                SetStatus($"Try again in {FormatRetryAfter(retryAfter)}", isError: true);
+            return;
+        }
+
+        _isCheckingForUpdates = true;
+        CheckUpdatesButton.IsEnabled = false;
+        CheckUpdatesButton.Content = "...";
         try
         {
             _availableUpdate = await _updateService.CheckAsync(_lifetimeCancellation.Token);
             if (_availableUpdate is null)
+            {
+                if (manual)
+                    SetStatus("You're up to date");
                 return;
+            }
+
+            if (!manual && _updateSkipStore.IsSkipped(_availableUpdate.AvailableVersion))
+            {
+                UpdateBanner.Visibility = Visibility.Collapsed;
+                return;
+            }
 
             UpdateBannerText.Text = $"RBXDowngrader {_availableUpdate.AvailableVersion.ToString(3)} is available";
             UpdateButton.Content = "Update";
             UpdateButton.IsEnabled = true;
+            SkipUpdateButton.Visibility = Visibility.Visible;
             UpdateBanner.Visibility = Visibility.Visible;
+            if (manual)
+                SetStatus("Update available");
         }
         catch (OperationCanceledException) { }
         catch
         {
-            // Update checks never interrupt normal app use.
+            if (manual)
+                SetStatus("Update check unavailable", isError: true);
+        }
+        finally
+        {
+            _isCheckingForUpdates = false;
+            CheckUpdatesButton.Content = "Check";
+            CheckUpdatesButton.IsEnabled = !_isBusy;
+        }
+    }
+
+    private async void CheckUpdates_Click(object sender, RoutedEventArgs e) =>
+        await CheckForUpdatesAsync(manual: true);
+
+    private void SkipUpdate_Click(object sender, RoutedEventArgs e)
+    {
+        if (_availableUpdate is null)
+            return;
+
+        try
+        {
+            _updateSkipStore.Skip(_availableUpdate.AvailableVersion);
+            _availableUpdate = null;
+            UpdateBanner.Visibility = Visibility.Collapsed;
+            SetStatus("Update skipped");
+        }
+        catch (Exception ex)
+        {
+            SetStatus(ToFriendlyMessage(ex), isError: true);
         }
     }
 
@@ -102,6 +164,7 @@ public partial class MainWindow : Window
     {
         UpdateBannerText.Text = "Update could not be installed";
         UpdateButton.Visibility = Visibility.Collapsed;
+        SkipUpdateButton.Visibility = Visibility.Collapsed;
         UpdateBanner.Visibility = Visibility.Visible;
     }
 
@@ -330,6 +393,7 @@ public partial class MainWindow : Window
     {
         VersionInput.IsEnabled = !busy;
         RecentBuildsButton.IsEnabled = !busy;
+        CheckUpdatesButton.IsEnabled = !busy && !_isCheckingForUpdates;
         DownloadButton.IsEnabled = !busy && VersionHash.TryNormalize(VersionInput.Text, out _);
         DownloadButton.Content = busy ? "Working" : "Download";
         DownloadProgress.Visibility = busy ? Visibility.Visible : Visibility.Collapsed;
@@ -381,6 +445,10 @@ public partial class MainWindow : Window
         IOException => "A file is in use or storage is unavailable",
         _ => exception.Message
     };
+
+    private static string FormatRetryAfter(TimeSpan retryAfter) => retryAfter.TotalMinutes >= 1
+        ? $"{Math.Ceiling(retryAfter.TotalMinutes):0} minutes"
+        : $"{Math.Max(1, Math.Ceiling(retryAfter.TotalSeconds)):0} seconds";
 
     private void Window_MouseLeftButtonDown(object sender, MouseButtonEventArgs e)
     {

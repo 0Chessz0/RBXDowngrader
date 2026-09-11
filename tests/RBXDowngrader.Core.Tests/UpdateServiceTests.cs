@@ -14,7 +14,7 @@ public sealed class UpdateServiceTests
         using var temporary = new TemporaryDirectory();
         var package = CreateUpdatePackage();
         var hash = Convert.ToHexString(SHA256.HashData(package)).ToLowerInvariant();
-        var assetName = $"RBXDowngraderUpdate-{RuntimeIdentifier()}.zip";
+        var assetName = $"RBXDowngraderSetup-{RuntimeIdentifier()}.exe";
         var releaseJson = $$"""
             {"tag_name":"v9.0.0","assets":[{"name":"{{assetName}}","browser_download_url":"https://example.com/update.zip","size":{{package.Length}},"digest":"sha256:{{hash}}"}]}
             """;
@@ -22,7 +22,11 @@ public sealed class UpdateServiceTests
             Task.FromResult(request.RequestUri!.Host == "api.github.com"
                 ? HttpResponses.Json(releaseJson)
                 : HttpResponses.Bytes(package))));
-        using var service = new UpdateService(client, temporary.Path, new Version(1, 0, 0));
+        using var service = new UpdateService(
+            client,
+            temporary.Path,
+            new Version(1, 0, 0),
+            (_, _) => Task.FromResult<Stream>(new MemoryStream(package, writable: false)));
 
         var release = await service.CheckAsync();
         var prepared = await service.PrepareAsync(Assert.IsType<UpdateRelease>(release));
@@ -43,7 +47,7 @@ public sealed class UpdateServiceTests
         var release = new UpdateRelease(
             new Version(9, 0, 0),
             "v9.0.0",
-            "RBXDowngraderUpdate-win-x64.zip",
+            "RBXDowngraderSetup-win-x64.exe",
             new Uri("https://example.com/update.zip"),
             package.Length,
             new string('0', 64));
@@ -51,6 +55,30 @@ public sealed class UpdateServiceTests
         var exception = await Assert.ThrowsAsync<InvalidDataException>(() => service.PrepareAsync(release));
 
         Assert.Contains("hash", exception.Message, StringComparison.OrdinalIgnoreCase);
+    }
+
+    [Fact]
+    public async Task RejectsAHashValidInstallerWithACorruptEmbeddedPayload()
+    {
+        using var temporary = new TemporaryDirectory();
+        var installerBytes = new byte[] { 1, 2, 3, 4 };
+        var hash = Convert.ToHexString(SHA256.HashData(installerBytes));
+        using var client = new HttpClient(new DelegateHttpHandler((_, _) =>
+            Task.FromResult(HttpResponses.Bytes(installerBytes))));
+        using var service = new UpdateService(
+            client,
+            temporary.Path,
+            new Version(1, 0, 0),
+            (_, _) => Task.FromResult<Stream>(new MemoryStream([0, 1, 2], writable: false)));
+        var release = new UpdateRelease(
+            new Version(9, 0, 0),
+            "v9.0.0",
+            "RBXDowngraderSetup-win-x64.exe",
+            new Uri("https://example.com/setup.exe"),
+            installerBytes.Length,
+            hash);
+
+        await Assert.ThrowsAsync<InvalidDataException>(() => service.PrepareAsync(release));
     }
 
     [Fact]

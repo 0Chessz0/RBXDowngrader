@@ -10,6 +10,8 @@ public static class AppPaths
     public static string Temp { get; } = Path.Combine(Root, "temp");
     public static string LogFile { get; } = Path.Combine(Root, "RBXDowngrader.log");
     public static string RecentBuildsCache { get; } = Path.Combine(Root, "recent-builds-cache.json");
+    public static string UpdateCheckLog { get; } = Path.Combine(Root, "update-checks.json");
+    public static string SkippedUpdateVersion { get; } = Path.Combine(Root, "skipped-update-version.txt");
 
     public static void EnsureCreated()
     {

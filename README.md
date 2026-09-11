@@ -13,7 +13,7 @@ A small native Windows launcher for downloading, keeping, and launching Roblox p
 - Supports custom names and total installed disk usage
 - Launches versions or removes them instantly with silent background cleanup
 - Opens Roblox private-server share links in any selected installed version
-- Offers user-initiated in-place updates from verified GitHub Release assets
+- Offers user-initiated in-place updates from verified GitHub Release installer assets
 - Includes current-user and all-user installation, custom install paths, Start Menu registration, and a custom uninstaller
 
 The uninstaller removes both the selected program directory and `%APPDATA%\RBXDowngrader`. Selecting **Keep downloaded Roblox versions** preserves only the `robloxversions` folder.
@@ -28,7 +28,7 @@ dotnet test tests\RBXDowngrader.Core.Tests
 .\build-installer.ps1
 ```
 
-The packaging script writes `artifacts\RBXDowngraderSetup.exe` and `artifacts\RBXDowngraderUpdate-win-x64.zip`. The installer is self-contained and installs without administrator access. The local `artifacts` folder is intentionally ignored by Git; attach both files directly to a GitHub release. The update ZIP name must remain unchanged so installed copies can find it.
+The packaging script writes `artifacts\RBXDowngraderSetup-win-x64.exe` (or the selected runtime identifier). The installer is self-contained and installs without administrator access. The local `artifacts` folder is intentionally ignored by Git; attach only the architecture-matching setup executable to a GitHub release. The updater extracts the application payload embedded inside that setup executable, so no separate update ZIP is produced or required.
 
 Update downloads are checked against the size and SHA-256 digest supplied by GitHub before extraction. Updates replace only files listed in the packaged application-file manifest. Downloaded Roblox versions, custom names, caches, settings, and logs are not part of that manifest and remain untouched.
 

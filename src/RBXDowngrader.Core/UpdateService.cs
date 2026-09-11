@@ -16,8 +16,13 @@ public sealed class UpdateService : IDisposable
     private readonly bool _ownsClient;
     private readonly string _updatesRoot;
     private readonly Version _currentVersion;
+    private readonly Func<string, CancellationToken, Task<Stream>> _payloadStreamFactory;
 
-    public UpdateService(HttpClient? httpClient = null, string? updatesRoot = null, Version? currentVersion = null)
+    public UpdateService(
+        HttpClient? httpClient = null,
+        string? updatesRoot = null,
+        Version? currentVersion = null,
+        Func<string, CancellationToken, Task<Stream>>? payloadStreamFactory = null)
     {
         _ownsClient = httpClient is null;
         _httpClient = httpClient ?? new HttpClient(new SocketsHttpHandler
@@ -31,6 +36,7 @@ public sealed class UpdateService : IDisposable
         _httpClient.DefaultRequestHeaders.Add("X-GitHub-Api-Version", "2026-03-10");
         _updatesRoot = updatesRoot ?? Path.Combine(Path.GetTempPath(), "RBXDowngrader", "updates");
         _currentVersion = currentVersion ?? AppIdentity.Version;
+        _payloadStreamFactory = payloadStreamFactory ?? OpenEmbeddedPayloadAsync;
     }
 
     public async Task<UpdateRelease?> CheckAsync(CancellationToken cancellationToken = default)
@@ -49,7 +55,7 @@ public sealed class UpdateService : IDisposable
             return null;
         }
 
-        var expectedAssetName = $"RBXDowngraderUpdate-{GetRuntimeIdentifier()}.zip";
+        var expectedAssetName = $"RBXDowngraderSetup-{GetRuntimeIdentifier()}.exe";
         var asset = release.Assets.FirstOrDefault(candidate =>
             candidate.Name.Equals(expectedAssetName, StringComparison.OrdinalIgnoreCase));
         if (asset is null || asset.Size <= 0 || !TryParseSha256(asset.Digest, out var sha256)
@@ -74,7 +80,8 @@ public sealed class UpdateService : IDisposable
         CancellationToken cancellationToken = default)
     {
         var updateRoot = Path.Combine(_updatesRoot, $"{release.AvailableVersion}-{Guid.NewGuid():N}");
-        var archivePath = Path.Combine(updateRoot, release.AssetName);
+        var installerPath = Path.Combine(updateRoot, release.AssetName);
+        var payloadArchivePath = Path.Combine(updateRoot, "Payload.zip");
         var payloadDirectory = Path.Combine(updateRoot, "payload");
         Directory.CreateDirectory(updateRoot);
 
@@ -94,7 +101,7 @@ public sealed class UpdateService : IDisposable
 
             await using (var source = await response.Content.ReadAsStreamAsync(cancellationToken).ConfigureAwait(false))
             await using (var target = new FileStream(
-                archivePath, FileMode.CreateNew, FileAccess.Write, FileShare.None, 81_920, useAsync: true))
+                installerPath, FileMode.CreateNew, FileAccess.Write, FileShare.None, 81_920, useAsync: true))
             {
                 var buffer = new byte[81_920];
                 long received = 0;
@@ -109,19 +116,26 @@ public sealed class UpdateService : IDisposable
                 }
             }
 
-            var fileInfo = new FileInfo(archivePath);
+            var fileInfo = new FileInfo(installerPath);
             if (fileInfo.Length != release.AssetSize)
                 throw new InvalidDataException("The update did not download completely.");
 
-            await using (var archive = File.OpenRead(archivePath))
+            await using (var installer = File.OpenRead(installerPath))
             {
                 var actualHash = Convert.ToHexString(
-                    await SHA256.HashDataAsync(archive, cancellationToken).ConfigureAwait(false));
+                    await SHA256.HashDataAsync(installer, cancellationToken).ConfigureAwait(false));
                 if (!actualHash.Equals(release.Sha256, StringComparison.OrdinalIgnoreCase))
                     throw new InvalidDataException("The update hash does not match its release metadata.");
             }
 
-            SafeZipExtractor.Extract(archivePath, payloadDirectory);
+            await using (var payload = await _payloadStreamFactory(installerPath, cancellationToken).ConfigureAwait(false))
+            await using (var payloadArchive = new FileStream(
+                payloadArchivePath, FileMode.CreateNew, FileAccess.Write, FileShare.None, 81_920, useAsync: true))
+            {
+                await payload.CopyToAsync(payloadArchive, cancellationToken).ConfigureAwait(false);
+            }
+
+            SafeZipExtractor.Extract(payloadArchivePath, payloadDirectory);
             UpdateWorker.ValidatePayload(payloadDirectory);
             return new PreparedUpdate(release, updateRoot, payloadDirectory);
         }
@@ -180,6 +194,37 @@ public sealed class UpdateService : IDisposable
         Architecture.Arm64 => "win-arm64",
         _ => "win-x64"
     };
+
+    private static async Task<Stream> OpenEmbeddedPayloadAsync(
+        string installerPath,
+        CancellationToken cancellationToken)
+    {
+        var payloadPath = installerPath + ".payload.zip";
+        var startInfo = new ProcessStartInfo
+        {
+            FileName = installerPath,
+            WorkingDirectory = Path.GetDirectoryName(installerPath)!,
+            UseShellExecute = false,
+            CreateNoWindow = true,
+            WindowStyle = ProcessWindowStyle.Hidden
+        };
+        startInfo.ArgumentList.Add("--extract-payload");
+        startInfo.ArgumentList.Add(payloadPath);
+
+        using var process = Process.Start(startInfo)
+            ?? throw new InvalidDataException("The downloaded installer could not be started.");
+        await process.WaitForExitAsync(cancellationToken).ConfigureAwait(false);
+        if (process.ExitCode != 0 || !File.Exists(payloadPath))
+            throw new InvalidDataException("The downloaded installer did not provide an application payload.");
+
+        return new FileStream(
+            payloadPath,
+            FileMode.Open,
+            FileAccess.Read,
+            FileShare.Read,
+            81_920,
+            FileOptions.Asynchronous | FileOptions.DeleteOnClose);
+    }
 
     private static void TryDeleteDirectory(string path)
     {

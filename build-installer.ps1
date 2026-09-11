@@ -12,12 +12,14 @@ $uninstallerPublish = Join-Path $work 'uninstaller'
 $payloadDirectory = Join-Path $work 'payload'
 $payloadZip = Join-Path $repo 'src\RBXDowngrader.Installer\Payload.zip'
 $payloadManifestName = '.rbxdowngrader-app-files.json'
-$updateZip = Join-Path $artifacts "RBXDowngraderUpdate-$Runtime.zip"
+$installerName = "RBXDowngraderSetup-$Runtime.exe"
 
 & (Join-Path $repo 'tools\New-AppIcon.ps1')
 
 if (Test-Path $work) { Remove-Item -LiteralPath $work -Recurse -Force }
 New-Item -ItemType Directory -Force $appPublish, $uninstallerPublish, $payloadDirectory, $artifacts | Out-Null
+Get-ChildItem -LiteralPath $artifacts -Filter 'RBXDowngraderUpdate-*.zip' -File -ErrorAction SilentlyContinue |
+    Remove-Item -Force
 
 $payloadPublishProperties = @(
     '-c', 'Release', '-r', $Runtime,
@@ -44,7 +46,6 @@ $payloadFiles | ConvertTo-Json -Compress |
     Set-Content -LiteralPath (Join-Path $payloadDirectory $payloadManifestName) -Encoding utf8NoBOM
 
 if (Test-Path $payloadZip) { Remove-Item -LiteralPath $payloadZip -Force }
-if (Test-Path $updateZip) { Remove-Item -LiteralPath $updateZip -Force }
 Compress-Archive -Path (Join-Path $payloadDirectory '*') -DestinationPath $payloadZip -CompressionLevel Optimal
 
 $installerPublishProperties = @(
@@ -58,10 +59,8 @@ $installerPublishProperties = @(
 )
 dotnet publish (Join-Path $repo 'src\RBXDowngrader.Installer\RBXDowngrader.Installer.csproj') @installerPublishProperties -o (Join-Path $work 'installer')
 if ($LASTEXITCODE -ne 0) { throw 'The installer publish failed.' }
-Copy-Item -LiteralPath (Join-Path $work 'installer\RBXDowngraderSetup.exe') -Destination (Join-Path $artifacts 'RBXDowngraderSetup.exe') -Force
-Copy-Item -LiteralPath $payloadZip -Destination $updateZip -Force
+Copy-Item -LiteralPath (Join-Path $work 'installer\RBXDowngraderSetup.exe') -Destination (Join-Path $artifacts $installerName) -Force
 
 Remove-Item -LiteralPath $payloadZip -Force
 Remove-Item -LiteralPath $work -Recurse -Force
-Write-Host "Created $artifacts\RBXDowngraderSetup.exe"
-Write-Host "Created $updateZip"
+Write-Host "Created $artifacts\$installerName"

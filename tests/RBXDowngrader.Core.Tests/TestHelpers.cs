@@ -47,3 +47,14 @@ internal sealed class TemporaryDirectory : IDisposable
             Directory.Delete(Path, recursive: true);
     }
 }
+
+internal sealed class TestTimeProvider : TimeProvider
+{
+    private DateTimeOffset _utcNow;
+
+    public TestTimeProvider(DateTimeOffset utcNow) => _utcNow = utcNow;
+
+    public override DateTimeOffset GetUtcNow() => _utcNow;
+
+    public void Advance(TimeSpan amount) => _utcNow += amount;
+}

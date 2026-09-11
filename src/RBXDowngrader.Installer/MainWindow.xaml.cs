@@ -6,6 +6,7 @@ using System.Reflection;
 using System.Security.Principal;
 using System.Windows;
 using Microsoft.Win32;
+using RBXDowngrader.Core;
 
 namespace RBXDowngrader.Installer;
 
@@ -173,7 +174,12 @@ public partial class MainWindow : Window
 
         if (Directory.Exists(result) &&
             !File.Exists(Path.Combine(result, ".install-scope")) &&
-            Directory.EnumerateFileSystemEntries(result).Any())
+            Directory.EnumerateFileSystemEntries(result).Any(entry =>
+            {
+                var relativePath = Path.GetRelativePath(result, entry);
+                return !ApplicationDataPathRules.IsAllowedExistingEntry(
+                    relativePath, Directory.Exists(entry));
+            }))
         {
             throw new InvalidOperationException("Choose an empty folder or an existing RBXDowngrader installation.");
         }

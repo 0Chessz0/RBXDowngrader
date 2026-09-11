@@ -51,7 +51,5 @@ jobs:
         uses: actions/upload-artifact@v6
         with:
           name: RBXDowngraderSetup-${{ github.ref_name }}
-          path: |
-            artifacts\RBXDowngraderSetup.exe
-            artifacts\RBXDowngraderUpdate-win-x64.zip
+          path: artifacts\RBXDowngraderSetup-win-x64.exe
           if-no-files-found: error

@@ -8,6 +8,7 @@
     <ApplicationIcon>app.ico</ApplicationIcon>
   </PropertyGroup>
   <ItemGroup>
+    <ProjectReference Include="..\RBXDowngrader.Core\RBXDowngrader.Core.csproj" />
     <Resource Include="app-icon.png" />
     <EmbeddedResource Include="Payload.zip" Condition="Exists('Payload.zip')" LogicalName="RBXDowngrader.Payload.zip" />
   </ItemGroup>

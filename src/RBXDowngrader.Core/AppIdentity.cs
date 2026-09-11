@@ -2,7 +2,7 @@ using System.Reflection;
 
 namespace RBXDowngrader.Core;
 
-internal static class AppIdentity
+public static class AppIdentity
 {
     public static Version Version { get; } =
         typeof(AppIdentity).Assembly.GetName().Version ?? new Version(0, 0, 0);

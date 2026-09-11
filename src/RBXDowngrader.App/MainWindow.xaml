@@ -52,10 +52,13 @@
                     <Grid.ColumnDefinitions>
                         <ColumnDefinition Width="*" />
                         <ColumnDefinition Width="Auto" />
+                        <ColumnDefinition Width="Auto" />
                     </Grid.ColumnDefinitions>
                     <TextBlock x:Name="UpdateBannerText" Text="Update available" Foreground="#BFD2FF"
                                FontSize="11" FontWeight="SemiBold" VerticalAlignment="Center" />
-                    <Button x:Name="UpdateButton" Grid.Column="1" Content="Update" Style="{StaticResource SecondaryButton}"
+                    <Button x:Name="SkipUpdateButton" Grid.Column="1" Content="Skip" Style="{StaticResource TextButton}"
+                            Height="32" Margin="8,0,4,0" Click="SkipUpdate_Click" />
+                    <Button x:Name="UpdateButton" Grid.Column="2" Content="Update" Style="{StaticResource SecondaryButton}"
                             Width="76" Height="32" Margin="14,0,0,0" Click="Update_Click" />
                 </Grid>
             </Border>
@@ -63,6 +66,8 @@
             <Grid Grid.Row="2" Margin="34,14,34,26">
                 <Grid.ColumnDefinitions>
                     <ColumnDefinition Width="*" />
+                    <ColumnDefinition Width="8" />
+                    <ColumnDefinition Width="Auto" />
                     <ColumnDefinition Width="8" />
                     <ColumnDefinition Width="Auto" />
                     <ColumnDefinition Width="14" />
@@ -143,7 +148,9 @@
                         </Border>
                     </primitives:Popup>
                 </Grid>
-                <Button x:Name="DownloadButton" Grid.Column="4" Style="{StaticResource PrimaryButton}" Width="128" VerticalAlignment="Bottom"
+                <Button x:Name="CheckUpdatesButton" Grid.Column="4" Style="{StaticResource SecondaryButton}" Width="64" Height="48"
+                        VerticalAlignment="Bottom" Content="Check" Click="CheckUpdates_Click" ToolTip="Check for updates" />
+                <Button x:Name="DownloadButton" Grid.Column="6" Style="{StaticResource PrimaryButton}" Width="128" VerticalAlignment="Bottom"
                         Content="Download" IsEnabled="False" Click="Download_Click" />
             </Grid>
 
@@ -240,6 +247,7 @@
                     <ColumnDefinition Width="Auto" />
                 </Grid.ColumnDefinitions>
                 <StackPanel VerticalAlignment="Center">
+                    <TextBlock x:Name="VersionLabel" Foreground="#666666" FontSize="10" />
                     <TextBlock x:Name="StatusText" Foreground="{StaticResource MutedBrush}" FontSize="11" Visibility="Collapsed" />
                     <ProgressBar x:Name="DownloadProgress" Height="3" Margin="0,10,0,0" Maximum="100" Value="0" Background="#242424" Foreground="{StaticResource AccentBrush}" BorderThickness="0" Visibility="Collapsed" />
                 </StackPanel>

@@ -159,10 +159,7 @@ public static class UpdateWorker
         if (segments.Length == 0 || segments.Any(segment => segment is "." or ".."))
             throw new InvalidDataException("The update contains an unsafe file path.");
 
-        if (segments[0].Equals("robloxversions", StringComparison.OrdinalIgnoreCase)
-            || segments[0].Equals("temp", StringComparison.OrdinalIgnoreCase)
-            || normalized.Equals("RBXDowngrader.log", StringComparison.OrdinalIgnoreCase)
-            || normalized.Equals("recent-builds-cache.json", StringComparison.OrdinalIgnoreCase)
+        if (ApplicationDataPathRules.IsProtectedPath(normalized)
             || normalized.Equals(".install-scope", StringComparison.OrdinalIgnoreCase))
         {
             throw new InvalidDataException("The update attempted to replace application data.");
