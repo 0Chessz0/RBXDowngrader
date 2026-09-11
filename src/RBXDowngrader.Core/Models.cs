@@ -1,3 +1,5 @@
+using System.Globalization;
+
 namespace RBXDowngrader.Core;
 
 public sealed record InstalledVersion(
@@ -5,19 +7,42 @@ public sealed record InstalledVersion(
     string DirectoryPath,
     DateTimeOffset InstalledAt,
     long SizeBytes,
-    string ExecutablePath)
+    string ExecutablePath,
+    string? CustomName = null)
 {
     public string ShortHash => Version.StartsWith("version-", StringComparison.OrdinalIgnoreCase)
         ? Version[8..]
         : Version;
 
-    public string SizeText => SizeBytes switch
+    public string DisplayName => string.IsNullOrWhiteSpace(CustomName) ? ShortHash : CustomName;
+    public string SizeText => FileSizeFormatter.Format(SizeBytes);
+    public string DetailsText => string.IsNullOrWhiteSpace(CustomName)
+        ? $"{SizeText}  •  {InstalledAt:dd MMM yyyy}"
+        : $"{ShortHash}  •  {SizeText}  •  {InstalledAt:dd MMM yyyy}";
+}
+
+public static class FileSizeFormatter
+{
+    public static string Format(long bytes) => bytes switch
     {
-        >= 1_073_741_824 => $"{SizeBytes / 1_073_741_824d:0.0} GB",
-        >= 1_048_576 => $"{SizeBytes / 1_048_576d:0} MB",
-        >= 1024 => $"{SizeBytes / 1024d:0} KB",
-        _ => $"{SizeBytes} B"
+        >= 1_073_741_824 => $"{(bytes / 1_073_741_824d).ToString("0.0", CultureInfo.InvariantCulture)} GB",
+        >= 1_048_576 => $"{(bytes / 1_048_576d).ToString("0", CultureInfo.InvariantCulture)} MB",
+        >= 1024 => $"{(bytes / 1024d).ToString("0", CultureInfo.InvariantCulture)} KB",
+        _ => $"{bytes.ToString(CultureInfo.InvariantCulture)} B"
     };
+}
+
+public sealed record RecentBuild(
+    string Version,
+    string DisplayVersion,
+    DateTimeOffset? ReleasedAt,
+    bool IsCurrent)
+{
+    public string ShortHash => Version.StartsWith("version-", StringComparison.OrdinalIgnoreCase)
+        ? Version[8..]
+        : Version;
+
+    public string StatusText => IsCurrent ? "CURRENT" : string.Empty;
 }
 
 public sealed record DownloadProgress(

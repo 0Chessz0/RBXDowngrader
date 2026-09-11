@@ -37,7 +37,24 @@ public partial class PrivateServerDialog : Window
         e.Handled = true;
     }
 
-    private void Window_Loaded(object sender, RoutedEventArgs e) => LinkInput.Focus();
+    private void Window_Loaded(object sender, RoutedEventArgs e)
+    {
+        try
+        {
+            if (Clipboard.ContainsText()
+                && PrivateServerLink.TryNormalize(Clipboard.GetText(), out var link))
+            {
+                LinkInput.Text = link;
+                LinkInput.CaretIndex = LinkInput.Text.Length;
+            }
+        }
+        catch
+        {
+            // Clipboard access can fail briefly while another app owns it.
+        }
+
+        LinkInput.Focus();
+    }
 
     private void Window_MouseLeftButtonDown(object sender, MouseButtonEventArgs e)
     {

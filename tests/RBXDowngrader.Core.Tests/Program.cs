@@ -18,6 +18,38 @@ var tests = new (string Name, Action Run)[]
         Expect(!VersionHash.TryNormalize("../../Windows", out _));
         Expect(!VersionHash.TryNormalize("version-short", out _));
     }),
+    ("extracts a version hash from pasted text", () =>
+    {
+        Expect(VersionHash.TryExtract(
+            "Build: https://setup.rbxcdn.com/version-E7D81637D42C4B23-rbxPkgManifest.txt",
+            out var result));
+        ExpectEqual("version-e7d81637d42c4b23", result);
+        Expect(!VersionHash.TryExtract("0123456789abcdef0123456789abcdef", out _));
+    }),
+    ("formats aggregate disk sizes", () =>
+    {
+        ExpectEqual("3.2 GB", FileSizeFormatter.Format(3_435_973_837));
+        ExpectEqual("512 MB", FileSizeFormatter.Format(536_870_912));
+    }),
+    ("reads the five newest build feed entries", () =>
+    {
+        const string json = """
+            {"platform":"windows","versions":[
+              {"version":"version-0000000000000001","displayVersion":"0.5","liveAt":5000,"installable":true,"recommended":true,"lifecycle":"live"},
+              {"version":"version-0000000000000002","displayVersion":"0.4","liveAt":4000,"installable":true,"recommended":false,"lifecycle":"superseded"},
+              {"version":"version-0000000000000003","displayVersion":"0.3","liveAt":3000,"installable":true,"recommended":false,"lifecycle":"superseded"},
+              {"version":"version-0000000000000004","displayVersion":"0.2","liveAt":2000,"installable":true,"recommended":false,"lifecycle":"superseded"},
+              {"version":"version-0000000000000005","displayVersion":"0.1","liveAt":1000,"installable":true,"recommended":false,"lifecycle":"superseded"},
+              {"version":"version-0000000000000006","displayVersion":"0.0","liveAt":0,"installable":true,"recommended":false,"lifecycle":"superseded"}
+            ]}
+            """;
+        using var client = new HttpClient(new StaticJsonHandler(json));
+        using var service = new RecentBuildService(client);
+        var result = service.GetLatestAsync().GetAwaiter().GetResult();
+        ExpectEqual(5, result.Count);
+        ExpectEqual("version-0000000000000001", result[0].Version);
+        Expect(result[0].IsCurrent);
+    }),
     ("accepts Roblox private server links", () =>
     {
         Expect(PrivateServerLink.TryNormalize(
@@ -194,4 +226,14 @@ static void ExpectThrows<TException>(Action action) where TException : Exception
         return;
     }
     throw new InvalidOperationException($"Expected {typeof(TException).Name}.");
+}
+
+sealed class StaticJsonHandler(string json) : HttpMessageHandler
+{
+    protected override Task<HttpResponseMessage> SendAsync(
+        HttpRequestMessage request,
+        CancellationToken cancellationToken) => Task.FromResult(new HttpResponseMessage(System.Net.HttpStatusCode.OK)
+        {
+            Content = new StringContent(json, System.Text.Encoding.UTF8, "application/json")
+        });
 }

@@ -12,10 +12,13 @@ public partial class MainWindow : Window
 {
     private readonly VersionStore _store = new();
     private readonly RobloxDownloadService _downloader = new();
+    private readonly RecentBuildService _recentBuildService = new();
     private CancellationTokenSource? _downloadCancellation;
     private bool _isBusy;
+    private bool _isLoadingRecentBuilds;
 
     public ObservableCollection<InstalledVersion> Versions { get; } = [];
+    public ObservableCollection<RecentBuild> RecentBuilds { get; } = [];
 
     public MainWindow()
     {
@@ -27,6 +30,7 @@ public partial class MainWindow : Window
     {
         AppPaths.EnsureCreated();
         await RefreshVersionsAsync();
+        TryPrefillVersionFromClipboard();
         VersionInput.Focus();
     }
 
@@ -39,9 +43,7 @@ public partial class MainWindow : Window
             foreach (var version in installed)
                 Versions.Add(version);
 
-            VersionCount.Text = Versions.Count == 1 ? "1 version" : $"{Versions.Count} versions";
-            EmptyState.Visibility = Versions.Count == 0 ? Visibility.Visible : Visibility.Collapsed;
-            VersionsList.Visibility = Versions.Count == 0 ? Visibility.Collapsed : Visibility.Visible;
+            UpdateInstalledSummary();
         }
         catch (Exception ex)
         {
@@ -124,7 +126,7 @@ public partial class MainWindow : Window
         }
     }
 
-    private async void Delete_Click(object sender, RoutedEventArgs e)
+    private void Delete_Click(object sender, RoutedEventArgs e)
     {
         if (_isBusy || (sender as FrameworkElement)?.DataContext is not InstalledVersion version)
             return;
@@ -140,15 +142,85 @@ public partial class MainWindow : Window
 
         try
         {
-            SetStatus("Deleting version");
-            await _store.DeleteAsync(version);
-            await RefreshVersionsAsync();
-            SetStatus("Version deleted");
+            _store.QueueDelete(version);
+            Versions.Remove(version);
+            UpdateInstalledSummary();
         }
         catch (Exception ex)
         {
             SetStatus(ToFriendlyMessage(ex), isError: true);
         }
+    }
+
+    private async void Rename_Click(object sender, RoutedEventArgs e)
+    {
+        if (_isBusy || (sender as FrameworkElement)?.DataContext is not InstalledVersion version)
+            return;
+
+        var dialog = new RenameDialog(version.CustomName ?? version.ShortHash) { Owner = this };
+        if (dialog.ShowDialog() != true)
+            return;
+
+        try
+        {
+            var renamed = await _store.RenameAsync(version, dialog.ClientName);
+            var index = Versions.IndexOf(version);
+            if (index >= 0)
+                Versions[index] = renamed;
+        }
+        catch (Exception ex)
+        {
+            SetStatus(ToFriendlyMessage(ex), isError: true);
+        }
+    }
+
+    private async void RecentBuilds_Click(object sender, RoutedEventArgs e)
+    {
+        RecentBuildsPopup.IsOpen = !RecentBuildsPopup.IsOpen;
+        if (!RecentBuildsPopup.IsOpen || _isLoadingRecentBuilds)
+            return;
+
+        _isLoadingRecentBuilds = true;
+        RecentBuilds.Clear();
+        RecentBuildsList.Visibility = Visibility.Collapsed;
+        RecentBuildsState.Text = "Loading";
+        RecentBuildsState.Visibility = Visibility.Visible;
+
+        try
+        {
+            var builds = await _recentBuildService.GetLatestAsync();
+            foreach (var build in builds)
+                RecentBuilds.Add(build);
+
+            if (RecentBuilds.Count == 0)
+            {
+                RecentBuildsState.Text = "No recent builds found";
+            }
+            else
+            {
+                RecentBuildsState.Visibility = Visibility.Collapsed;
+                RecentBuildsList.Visibility = Visibility.Visible;
+            }
+        }
+        catch
+        {
+            RecentBuildsState.Text = "Recent builds unavailable";
+        }
+        finally
+        {
+            _isLoadingRecentBuilds = false;
+        }
+    }
+
+    private void RecentBuild_Click(object sender, RoutedEventArgs e)
+    {
+        if ((sender as FrameworkElement)?.DataContext is not RecentBuild build)
+            return;
+
+        VersionInput.Text = build.Version;
+        VersionInput.CaretIndex = VersionInput.Text.Length;
+        RecentBuildsPopup.IsOpen = false;
+        VersionInput.Focus();
     }
 
     private void VersionInput_TextChanged(object sender, TextChangedEventArgs e)
@@ -165,17 +237,59 @@ public partial class MainWindow : Window
         }
     }
 
+    private void VersionInput_Pasting(object sender, DataObjectPastingEventArgs e)
+    {
+        if (!e.DataObject.GetDataPresent(DataFormats.UnicodeText))
+            return;
+
+        if (e.DataObject.GetData(DataFormats.UnicodeText) is not string text
+            || !VersionHash.TryExtract(text, out var version))
+            return;
+
+        VersionInput.Text = version;
+        VersionInput.CaretIndex = VersionInput.Text.Length;
+        e.CancelCommand();
+    }
+
     private void Cancel_Click(object sender, RoutedEventArgs e) => _downloadCancellation?.Cancel();
 
     private void SetBusyState(bool busy)
     {
         VersionInput.IsEnabled = !busy;
+        RecentBuildsButton.IsEnabled = !busy;
         DownloadButton.IsEnabled = !busy && VersionHash.TryNormalize(VersionInput.Text, out _);
         DownloadButton.Content = busy ? "Working" : "Download";
         DownloadProgress.Visibility = busy ? Visibility.Visible : Visibility.Collapsed;
         CancelButton.Visibility = busy ? Visibility.Visible : Visibility.Collapsed;
         if (!busy)
             DownloadProgress.Value = 0;
+    }
+
+    private void TryPrefillVersionFromClipboard()
+    {
+        try
+        {
+            if (string.IsNullOrWhiteSpace(VersionInput.Text)
+                && Clipboard.ContainsText()
+                && VersionHash.TryExtract(Clipboard.GetText(), out var version))
+            {
+                VersionInput.Text = version;
+                VersionInput.CaretIndex = VersionInput.Text.Length;
+            }
+        }
+        catch
+        {
+            // Clipboard access can fail briefly while another app owns it.
+        }
+    }
+
+    private void UpdateInstalledSummary()
+    {
+        var count = Versions.Count;
+        var totalSize = Versions.Sum(version => version.SizeBytes);
+        VersionCount.Text = $"{FileSizeFormatter.Format(totalSize)} used across {count} {(count == 1 ? "build" : "builds")}";
+        EmptyState.Visibility = count == 0 ? Visibility.Visible : Visibility.Collapsed;
+        VersionsList.Visibility = count == 0 ? Visibility.Collapsed : Visibility.Visible;
     }
 
     private void SetStatus(string message, bool isError = false)
@@ -208,6 +322,7 @@ public partial class MainWindow : Window
     {
         _downloadCancellation?.Cancel();
         _downloader.Dispose();
+        _recentBuildService.Dispose();
         base.OnClosed(e);
     }
 }

@@ -1,7 +1,18 @@
-bin/
-obj/
-artifacts/
-*.user
-*.suo
-*.zip
+# IDE and local user state
 .vs/
+.idea/
+.vscode/
+*.suo
+*.user
+*.userosscache
+
+# Build and test output
+**/bin/
+**/obj/
+TestResults/
+*.pdb
+*.log
+
+# Installer output and intermediates. Upload the generated EXE as a release asset.
+src/RBXDowngrader.Installer/Payload.zip
+artifacts/

@@ -8,7 +8,10 @@ A small native Windows launcher for downloading, keeping, and launching Roblox p
 - Downloads official deployment packages from Roblox CDN endpoints
 - Verifies package checksums and blocks unsafe archive paths
 - Stores builds in `%APPDATA%\RBXDowngrader\robloxversions`
-- Launches and deletes installed versions from one clean window
+- Shows the five newest known Windows builds in a compact live picker
+- Detects copied version hashes and private-server links
+- Supports custom names and total installed disk usage
+- Launches versions or removes them instantly with silent background cleanup
 - Opens Roblox private-server share links in any selected installed version
 - Includes current-user and all-user installation, custom install paths, Start Menu registration, and a custom uninstaller
 
@@ -24,7 +27,9 @@ dotnet run --project tests\RBXDowngrader.Core.Tests
 .\build-installer.ps1
 ```
 
-The packaged installer is written to `artifacts\RBXDowngraderSetup.exe`. It is self-contained and installs without administrator access.
+The packaged installer is written to `artifacts\RBXDowngraderSetup.exe`. It is self-contained and installs without administrator access. The local `artifacts` folder is intentionally ignored by Git; attach the EXE directly to a GitHub release.
+
+The recent-build picker reads a five-item Windows history response from the public [RBXOffsets API](https://rbxoffsets.com/documents/api). Packages are still downloaded directly from Roblox deployment servers.
 
 ## Notes
 

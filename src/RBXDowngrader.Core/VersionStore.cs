@@ -6,6 +6,10 @@ namespace RBXDowngrader.Core;
 public sealed class VersionStore
 {
     private const string MetadataFileName = ".rbxdowngrader.json";
+    private const string DeleteMarkerFileName = ".delete-pending";
+    public const string DeleteWorkerArgument = "--delete-version";
+
+    private static string PendingDeletesRoot => Path.Combine(AppPaths.Temp, "pending-delete");
 
     public async Task<IReadOnlyList<InstalledVersion>> GetInstalledAsync(CancellationToken cancellationToken = default)
     {
@@ -15,6 +19,9 @@ public sealed class VersionStore
         foreach (var directory in Directory.EnumerateDirectories(AppPaths.Versions, "version-*"))
         {
             cancellationToken.ThrowIfCancellationRequested();
+            if (File.Exists(Path.Combine(directory, DeleteMarkerFileName)))
+                continue;
+
             var executable = FindPlayerExecutable(directory);
             if (executable is null)
                 continue;
@@ -25,7 +32,7 @@ public sealed class VersionStore
                 .ConfigureAwait(false);
 
             results.Add(new InstalledVersion(
-                Path.GetFileName(directory), directory, installedAt, size, executable));
+                Path.GetFileName(directory), directory, installedAt, size, executable, metadata?.CustomName));
         }
 
         return results.OrderByDescending(version => version.InstalledAt).ToArray();
@@ -63,26 +70,99 @@ public sealed class VersionStore
         Process.Start(startInfo);
     }
 
-    public async Task DeleteAsync(InstalledVersion version, CancellationToken cancellationToken = default)
+    public void QueueDelete(InstalledVersion version)
     {
-        var versionsRoot = Path.GetFullPath(AppPaths.Versions)
-            .TrimEnd(Path.DirectorySeparatorChar) + Path.DirectorySeparatorChar;
-        var target = Path.GetFullPath(version.DirectoryPath)
-            .TrimEnd(Path.DirectorySeparatorChar) + Path.DirectorySeparatorChar;
-
-        if (!target.StartsWith(versionsRoot, StringComparison.OrdinalIgnoreCase) || target == versionsRoot)
+        AppPaths.EnsureCreated();
+        if (!IsChildOf(version.DirectoryPath, AppPaths.Versions))
             throw new InvalidOperationException("Refusing to delete a folder outside the versions directory.");
+        if (!Directory.Exists(version.DirectoryPath))
+            return;
 
-        await Task.Run(() => Directory.Delete(version.DirectoryPath, recursive: true), cancellationToken)
-            .ConfigureAwait(false);
+        Directory.CreateDirectory(PendingDeletesRoot);
+        var pendingPath = Path.Combine(
+            PendingDeletesRoot,
+            $"{Path.GetFileName(version.DirectoryPath)}-{Guid.NewGuid():N}");
+
+        string workerTarget;
+        try
+        {
+            Directory.Move(version.DirectoryPath, pendingPath);
+            workerTarget = pendingPath;
+        }
+        catch (IOException)
+        {
+            File.WriteAllText(Path.Combine(version.DirectoryPath, DeleteMarkerFileName), string.Empty);
+            workerTarget = version.DirectoryPath;
+        }
+        catch (UnauthorizedAccessException)
+        {
+            File.WriteAllText(Path.Combine(version.DirectoryPath, DeleteMarkerFileName), string.Empty);
+            workerTarget = version.DirectoryPath;
+        }
+
+        StartDeleteWorker(workerTarget);
     }
 
-    public static async Task WriteMetadataAsync(string directory, string version, CancellationToken cancellationToken)
+    public async Task<InstalledVersion> RenameAsync(
+        InstalledVersion version,
+        string name,
+        CancellationToken cancellationToken = default)
     {
-        var metadata = new VersionMetadata(version, DateTimeOffset.UtcNow);
-        await using var stream = File.Create(Path.Combine(directory, MetadataFileName));
-        await JsonSerializer.SerializeAsync(stream, metadata, cancellationToken: cancellationToken)
-            .ConfigureAwait(false);
+        if (!IsChildOf(version.DirectoryPath, AppPaths.Versions) || !Directory.Exists(version.DirectoryPath))
+            throw new InvalidOperationException("That version is no longer installed.");
+
+        var normalizedName = name.Trim();
+        if (normalizedName.Length is < 1 or > 40 || normalizedName.Any(char.IsControl))
+            throw new ArgumentException("Use a name between 1 and 40 characters.", nameof(name));
+
+        await WriteMetadataAsync(
+            version.DirectoryPath,
+            new VersionMetadata(version.Version, version.InstalledAt, normalizedName),
+            cancellationToken).ConfigureAwait(false);
+        return version with { CustomName = normalizedName };
+    }
+
+    public static Task WriteMetadataAsync(string directory, string version, CancellationToken cancellationToken) =>
+        WriteMetadataAsync(directory, new VersionMetadata(version, DateTimeOffset.UtcNow, null), cancellationToken);
+
+    public static void ResumePendingDeletes()
+    {
+        AppPaths.EnsureCreated();
+        Directory.CreateDirectory(PendingDeletesRoot);
+
+        foreach (var directory in Directory.EnumerateDirectories(PendingDeletesRoot).ToArray())
+            StartDeleteWorker(directory);
+
+        foreach (var directory in Directory.EnumerateDirectories(AppPaths.Versions, "version-*").ToArray())
+        {
+            if (File.Exists(Path.Combine(directory, DeleteMarkerFileName)))
+                StartDeleteWorker(directory);
+        }
+    }
+
+    public static async Task RunDeleteWorkerAsync(string target, CancellationToken cancellationToken = default)
+    {
+        if (!IsAllowedDeleteTarget(target))
+            return;
+
+        var deadline = DateTimeOffset.UtcNow.AddHours(24);
+        while (Directory.Exists(target) && DateTimeOffset.UtcNow < deadline)
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+            try
+            {
+                Directory.Delete(target, recursive: true);
+                return;
+            }
+            catch (IOException)
+            {
+                await Task.Delay(TimeSpan.FromSeconds(2), cancellationToken).ConfigureAwait(false);
+            }
+            catch (UnauthorizedAccessException)
+            {
+                await Task.Delay(TimeSpan.FromSeconds(2), cancellationToken).ConfigureAwait(false);
+            }
+        }
     }
 
     private static async Task<VersionMetadata?> ReadMetadataAsync(string directory, CancellationToken cancellationToken)
@@ -101,6 +181,58 @@ public sealed class VersionStore
         {
             return null;
         }
+    }
+
+    private static async Task WriteMetadataAsync(
+        string directory,
+        VersionMetadata metadata,
+        CancellationToken cancellationToken)
+    {
+        var path = Path.Combine(directory, MetadataFileName);
+        var temporaryPath = path + ".tmp";
+        await using (var stream = File.Create(temporaryPath))
+        {
+            await JsonSerializer.SerializeAsync(stream, metadata, cancellationToken: cancellationToken)
+                .ConfigureAwait(false);
+        }
+        File.Move(temporaryPath, path, overwrite: true);
+    }
+
+    private static void StartDeleteWorker(string target)
+    {
+        var executable = Environment.ProcessPath;
+        if (string.IsNullOrWhiteSpace(executable) || !File.Exists(executable))
+            throw new InvalidOperationException("Could not start the background delete worker.");
+
+        var startInfo = new ProcessStartInfo
+        {
+            FileName = executable,
+            UseShellExecute = false,
+            CreateNoWindow = true,
+            WindowStyle = ProcessWindowStyle.Hidden
+        };
+        startInfo.ArgumentList.Add(DeleteWorkerArgument);
+        startInfo.ArgumentList.Add(target);
+        Process.Start(startInfo);
+    }
+
+    private static bool IsAllowedDeleteTarget(string target)
+    {
+        if (IsChildOf(target, PendingDeletesRoot))
+            return true;
+
+        return IsChildOf(target, AppPaths.Versions)
+            && File.Exists(Path.Combine(target, DeleteMarkerFileName));
+    }
+
+    private static bool IsChildOf(string target, string parent)
+    {
+        var parentPath = Path.GetFullPath(parent).TrimEnd(Path.DirectorySeparatorChar)
+            + Path.DirectorySeparatorChar;
+        var targetPath = Path.GetFullPath(target).TrimEnd(Path.DirectorySeparatorChar)
+            + Path.DirectorySeparatorChar;
+        return targetPath.StartsWith(parentPath, StringComparison.OrdinalIgnoreCase)
+            && !targetPath.Equals(parentPath, StringComparison.OrdinalIgnoreCase);
     }
 
     private static string? FindPlayerExecutable(string directory)
@@ -126,5 +258,5 @@ public sealed class VersionStore
         return size;
     }
 
-    private sealed record VersionMetadata(string Version, DateTimeOffset InstalledAt);
+    private sealed record VersionMetadata(string Version, DateTimeOffset InstalledAt, string? CustomName);
 }
