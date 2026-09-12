@@ -42,7 +42,7 @@ public static partial class RobloxLogActivity
         RegexOptions.IgnoreCase | RegexOptions.CultureInvariant)]
     private static partial Regex JoinMetricsRegex();
 
-    [GeneratedRegex(@"(?:Disconnected from Game|leaveUGCGameInternal|NetworkClient:Remove)",
+    [GeneratedRegex(@"(?:Disconnected from Game|leaveUGCGameInternal)",
         RegexOptions.IgnoreCase | RegexOptions.CultureInvariant)]
     private static partial Regex LeaveLineRegex();
 }

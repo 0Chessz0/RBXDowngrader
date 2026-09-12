@@ -311,9 +311,13 @@ public sealed class RobloxLogActivityTests
 
     [Theory]
     [InlineData("[FLog::Output] leaveUGCGameInternal")]
-    [InlineData("[FLog::Network] NetworkClient:Remove")]
+    [InlineData("[FLog::Output] Disconnected from Game")]
     public void DetectsLeavingAGame(string line) =>
         Assert.Equal(RobloxActivityKind.Left, RobloxLogActivity.Parse(line)?.Kind);
+
+    [Fact]
+    public void IgnoresNetworkRemovalDuringADoorsTeleport() =>
+        Assert.Null(RobloxLogActivity.Parse("[FLog::Network] NetworkClient:Remove"));
 }
 
 public sealed class RobloxGameResolverTests
