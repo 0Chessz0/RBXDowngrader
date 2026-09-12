@@ -10,6 +10,12 @@ public sealed class VersionStore
     public const string DeleteWorkerArgument = "--delete-version";
 
     private static string PendingDeletesRoot => Path.Combine(AppPaths.Temp, "pending-delete");
+    private readonly VersionShortcutService _shortcuts;
+
+    public VersionStore(VersionShortcutService? shortcuts = null)
+    {
+        _shortcuts = shortcuts ?? new VersionShortcutService();
+    }
 
     public async Task<IReadOnlyList<InstalledVersion>> GetInstalledAsync(CancellationToken cancellationToken = default)
     {
@@ -75,6 +81,8 @@ public sealed class VersionStore
         AppPaths.EnsureCreated();
         if (!IsChildOf(version.DirectoryPath, AppPaths.Versions))
             throw new InvalidOperationException("Refusing to delete a folder outside the versions directory.");
+
+        _shortcuts.Remove(version);
         if (!Directory.Exists(version.DirectoryPath))
             return;
 
@@ -114,13 +122,33 @@ public sealed class VersionStore
         var normalizedName = name.Trim();
         if (normalizedName.Length is < 1 or > 40 || normalizedName.Any(char.IsControl))
             throw new ArgumentException("Use a name between 1 and 40 characters.", nameof(name));
+        if (!VersionShortcutService.IsValidDisplayName(normalizedName))
+            throw new ArgumentException("The name contains characters Windows cannot use in a shortcut.", nameof(name));
 
+        var renamed = version with { CustomName = normalizedName };
         await WriteMetadataAsync(
             version.DirectoryPath,
             new VersionMetadata(version.Version, version.InstalledAt, normalizedName),
             cancellationToken).ConfigureAwait(false);
-        return version with { CustomName = normalizedName };
+        try
+        {
+            _shortcuts.RenameExisting(version, renamed);
+        }
+        catch
+        {
+            await WriteMetadataAsync(
+                version.DirectoryPath,
+                new VersionMetadata(version.Version, version.InstalledAt, version.CustomName),
+                CancellationToken.None).ConfigureAwait(false);
+            throw;
+        }
+        return renamed;
     }
+
+    public VersionShortcutState GetShortcutState(InstalledVersion version) => _shortcuts.GetState(version);
+
+    public void SetShortcutState(InstalledVersion version, bool desktop, bool startMenu) =>
+        _shortcuts.SetState(version, desktop, startMenu);
 
     public static Task WriteMetadataAsync(string directory, string version, CancellationToken cancellationToken) =>
         WriteMetadataAsync(directory, new VersionMetadata(version, DateTimeOffset.UtcNow, null), cancellationToken);

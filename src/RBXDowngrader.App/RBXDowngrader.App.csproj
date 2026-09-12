@@ -3,12 +3,15 @@
     <OutputType>WinExe</OutputType>
     <TargetFramework>net8.0-windows</TargetFramework>
     <UseWPF>true</UseWPF>
+    <UseWindowsForms>true</UseWindowsForms>
     <AssemblyName>RBXDowngrader</AssemblyName>
     <RootNamespace>RBXDowngrader</RootNamespace>
     <ApplicationIcon>Assets\app.ico</ApplicationIcon>
   </PropertyGroup>
   <ItemGroup>
+    <Using Remove="System.Windows.Forms" />
     <ProjectReference Include="..\RBXDowngrader.Core\RBXDowngrader.Core.csproj" />
+    <PackageReference Include="DiscordRichPresence" Version="1.6.1.70" />
     <Resource Include="Assets\app-icon.png" />
   </ItemGroup>
 </Project>

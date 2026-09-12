@@ -47,6 +47,63 @@ public sealed class ModelTests
     }
 }
 
+public sealed class VersionShortcutServiceTests
+{
+    [Fact]
+    public void ShortcutSurvivesRenameAndIsRemovedWithTheVersion()
+    {
+        using var temporary = new TemporaryDirectory();
+        var desktop = Path.Combine(temporary.Path, "Desktop");
+        var startMenu = Path.Combine(temporary.Path, "StartMenu");
+        var versionDirectory = Path.Combine(temporary.Path, "version-0123456789abcdef");
+        Directory.CreateDirectory(versionDirectory);
+        var executable = Path.Combine(versionDirectory, "RobloxPlayerBeta.exe");
+        File.WriteAllBytes(executable, [0]);
+        var original = new InstalledVersion(
+            "version-0123456789abcdef",
+            versionDirectory,
+            DateTimeOffset.UtcNow,
+            1,
+            executable);
+        var renamed = original with { CustomName = "Classic Roblox" };
+        var service = new VersionShortcutService(desktop, startMenu);
+
+        service.SetState(original, desktop: true, startMenu: true);
+        service.RenameExisting(original, renamed);
+
+        Assert.False(File.Exists(Path.Combine(desktop, "0123456789abcdef.lnk")));
+        Assert.False(File.Exists(Path.Combine(startMenu, "0123456789abcdef.lnk")));
+        Assert.True(File.Exists(Path.Combine(desktop, "Classic Roblox.lnk")));
+        Assert.True(File.Exists(Path.Combine(startMenu, "Classic Roblox.lnk")));
+        Assert.Equal(new VersionShortcutState(true, true), service.GetState(renamed));
+
+        service.Remove(renamed);
+
+        Assert.Equal(new VersionShortcutState(false, false), service.GetState(renamed));
+    }
+
+    [Fact]
+    public void RenameDoesNotCreateMissingShortcuts()
+    {
+        using var temporary = new TemporaryDirectory();
+        var service = new VersionShortcutService(
+            Path.Combine(temporary.Path, "Desktop"),
+            Path.Combine(temporary.Path, "StartMenu"));
+        var version = new InstalledVersion(
+            "version-0123456789abcdef",
+            temporary.Path,
+            DateTimeOffset.UtcNow,
+            0,
+            Path.Combine(temporary.Path, "RobloxPlayerBeta.exe"));
+
+        service.RenameExisting(version, version with { CustomName = "Renamed" });
+
+        Assert.Equal(
+            new VersionShortcutState(false, false),
+            service.GetState(version with { CustomName = "Renamed" }));
+    }
+}
+
 public sealed class UpdateCheckThrottleTests
 {
     [Fact]
@@ -98,11 +155,18 @@ public sealed class UpdateSkipStoreTests
 public sealed class ApplicationDataPathRulesTests
 {
     [Theory]
+    [InlineData("settings.json")]
+    [InlineData(@"robloxversions\version-0123456789abcdef\RobloxPlayerBeta.exe")]
+    public void ProtectsSettingsAndDownloadedVersionsFromUpdatePayloads(string path) =>
+        Assert.True(ApplicationDataPathRules.IsProtectedPath(path));
+
+    [Theory]
     [InlineData("robloxversions", true)]
     [InlineData("temp", true)]
     [InlineData("RBXDowngrader.log", false)]
     [InlineData("recent-builds-cache.json", false)]
     [InlineData("update-checks.json", false)]
+    [InlineData("settings.json", false)]
     public void AllowsKnownDataLeftovers(string path, bool isDirectory) =>
         Assert.True(ApplicationDataPathRules.IsAllowedExistingEntry(path, isDirectory));
 
@@ -111,6 +175,54 @@ public sealed class ApplicationDataPathRulesTests
     [InlineData("unknown.txt", false)]
     public void BlocksUnknownInstallDirectoryEntries(string path, bool isDirectory) =>
         Assert.False(ApplicationDataPathRules.IsAllowedExistingEntry(path, isDirectory));
+}
+
+public sealed class SettingsStoreTests
+{
+    [Fact]
+    public void UsesEnabledDefaultsWhenNoSettingsExist()
+    {
+        using var temporary = new TemporaryDirectory();
+        var store = new SettingsStore(Path.Combine(temporary.Path, "settings.json"));
+
+        var settings = store.Load();
+
+        Assert.True(settings.DiscordRichPresenceEnabled);
+        Assert.True(settings.MinimizeToTrayOnLaunch);
+        Assert.True(settings.AutomaticUpdateChecksEnabled);
+    }
+
+    [Fact]
+    public void PersistsPreferences()
+    {
+        using var temporary = new TemporaryDirectory();
+        var path = Path.Combine(temporary.Path, "settings.json");
+        var store = new SettingsStore(path);
+        var expected = new AppSettings
+        {
+            DiscordRichPresenceEnabled = false,
+            MinimizeToTrayOnLaunch = false,
+            AutomaticUpdateChecksEnabled = false
+        };
+
+        store.Save(expected);
+
+        Assert.Equal(expected, store.Load());
+    }
+
+    [Fact]
+    public void FallsBackToDefaultsForInvalidJson()
+    {
+        using var temporary = new TemporaryDirectory();
+        var path = Path.Combine(temporary.Path, "settings.json");
+        File.WriteAllText(path, "not json");
+
+        var settings = new SettingsStore(path).Load();
+
+        Assert.True(settings.DiscordRichPresenceEnabled);
+        Assert.True(settings.MinimizeToTrayOnLaunch);
+        Assert.True(settings.AutomaticUpdateChecksEnabled);
+    }
 }
 
 public sealed class RecentBuildServiceTests
@@ -180,6 +292,51 @@ public sealed class PrivateServerLinkTests
     {
         Assert.False(PrivateServerLink.TryNormalize("https://example.com/share?code=abc", out _));
         Assert.False(PrivateServerLink.TryNormalize("not a link", out _));
+    }
+}
+
+public sealed class RobloxLogActivityTests
+{
+    [Theory]
+    [InlineData("[FLog::Output] ! Joining game '695c6db6' place 9391468976 at 10.9.7.217", 9391468976)]
+    [InlineData("[FLog::GameJoinLoadTime] Report game_join_loadtime: placeid:9391468976, universeid:3508322461", 9391468976)]
+    public void ReadsPlaceIdsFromRobloxJoinLines(string line, long expectedPlaceId)
+    {
+        var activity = RobloxLogActivity.Parse(line);
+
+        Assert.NotNull(activity);
+        Assert.Equal(RobloxActivityKind.Joined, activity.Kind);
+        Assert.Equal(expectedPlaceId, activity.PlaceId);
+    }
+
+    [Theory]
+    [InlineData("[FLog::Output] leaveUGCGameInternal")]
+    [InlineData("[FLog::Network] NetworkClient:Remove")]
+    public void DetectsLeavingAGame(string line) =>
+        Assert.Equal(RobloxActivityKind.Left, RobloxLogActivity.Parse(line)?.Kind);
+}
+
+public sealed class RobloxGameResolverTests
+{
+    [Fact]
+    public async Task ResolvesPlaceToUniverseToGameName()
+    {
+        var requests = new List<Uri>();
+        using var client = new HttpClient(new DelegateHttpHandler((request, _) =>
+        {
+            requests.Add(request.RequestUri!);
+            return Task.FromResult(request.RequestUri!.Host == "apis.roblox.com"
+                ? HttpResponses.Json("{\"universeId\":3508322461}")
+                : HttpResponses.Json("{\"data\":[{\"name\":\"Example Experience\"}]}") );
+        }));
+        var resolver = new RobloxGameResolver(client);
+
+        var name = await resolver.ResolveNameAsync(9391468976);
+
+        Assert.Equal("Example Experience", name);
+        Assert.Equal(2, requests.Count);
+        Assert.Contains("/places/9391468976/universe", requests[0].AbsolutePath, StringComparison.Ordinal);
+        Assert.Contains("universeIds=3508322461", requests[1].Query, StringComparison.Ordinal);
     }
 }
 

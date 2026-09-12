@@ -139,6 +139,12 @@ public partial class App : Application
                     if (MainWindow is null)
                         return;
 
+                    if (MainWindow is MainWindow mainWindow)
+                    {
+                        mainWindow.RestoreFromTray();
+                        return;
+                    }
+
                     if (MainWindow.WindowState == WindowState.Minimized)
                         MainWindow.WindowState = WindowState.Normal;
                     MainWindow.Show();

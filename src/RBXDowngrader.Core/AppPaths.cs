@@ -12,6 +12,7 @@ public static class AppPaths
     public static string RecentBuildsCache { get; } = Path.Combine(Root, "recent-builds-cache.json");
     public static string UpdateCheckLog { get; } = Path.Combine(Root, "update-checks.json");
     public static string SkippedUpdateVersion { get; } = Path.Combine(Root, "skipped-update-version.txt");
+    public static string Settings { get; } = Path.Combine(Root, "settings.json");
 
     public static void EnsureCreated()
     {

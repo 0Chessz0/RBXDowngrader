@@ -31,5 +31,6 @@ public static class ApplicationDataPathRules
         relativePath.Equals("RBXDowngrader.log", StringComparison.OrdinalIgnoreCase)
         || relativePath.Equals("recent-builds-cache.json", StringComparison.OrdinalIgnoreCase)
         || relativePath.Equals("update-checks.json", StringComparison.OrdinalIgnoreCase)
-        || relativePath.Equals("skipped-update-version.txt", StringComparison.OrdinalIgnoreCase);
+        || relativePath.Equals("skipped-update-version.txt", StringComparison.OrdinalIgnoreCase)
+        || relativePath.Equals("settings.json", StringComparison.OrdinalIgnoreCase);
 }

@@ -1,0 +1,84 @@
+<Window x:Class="RBXDowngrader.SettingsWindow"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        Title="RBXDowngrader Settings"
+        Width="460" Height="400" ResizeMode="NoResize"
+        WindowStartupLocation="CenterOwner"
+        WindowStyle="None" AllowsTransparency="True" Background="Transparent"
+        MouseLeftButtonDown="Window_MouseLeftButtonDown">
+    <Border Margin="18" CornerRadius="20" Background="{StaticResource SurfaceBrush}"
+            BorderBrush="#303030" BorderThickness="1">
+        <Border.Effect>
+            <DropShadowEffect Color="#000000" BlurRadius="28" ShadowDepth="7" Opacity="0.65" />
+        </Border.Effect>
+        <Grid>
+            <Grid.RowDefinitions>
+                <RowDefinition Height="62" />
+                <RowDefinition Height="*" />
+            </Grid.RowDefinitions>
+            <Grid Margin="22,0,14,0">
+                <TextBlock Text="Settings" FontSize="16" FontWeight="SemiBold" VerticalAlignment="Center" />
+                <Button HorizontalAlignment="Right" Style="{StaticResource IconButton}" Click="Close_Click" ToolTip="Close">
+                    <Path Data="M 3,3 L 13,13 M 13,3 L 3,13"
+                          Stroke="{Binding Foreground, RelativeSource={RelativeSource AncestorType=Button}}"
+                          StrokeThickness="1.5" />
+                </Button>
+            </Grid>
+            <StackPanel x:Name="PreferencesPanel" Grid.Row="1" Margin="24,12,24,24">
+                <TextBlock Text="PREFERENCES" Foreground="{StaticResource MutedBrush}"
+                           FontSize="10" FontWeight="SemiBold" />
+                <Border Margin="0,14,0,0" Padding="16,13" Background="{StaticResource RaisedBrush}"
+                        BorderBrush="{StaticResource LineBrush}" BorderThickness="1" CornerRadius="11">
+                    <Grid>
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="*" />
+                            <ColumnDefinition Width="Auto" />
+                        </Grid.ColumnDefinitions>
+                        <StackPanel>
+                            <TextBlock Text="Discord Rich Presence" FontSize="13" FontWeight="SemiBold" />
+                            <TextBlock Text="Show the Roblox game you're playing" Foreground="{StaticResource MutedBrush}"
+                                       FontSize="11" Margin="0,4,0,0" />
+                        </StackPanel>
+                        <CheckBox x:Name="RichPresenceToggle" Grid.Column="1" Style="{StaticResource ToggleSwitch}"
+                                  VerticalAlignment="Center" Checked="RichPresenceToggle_Changed"
+                                  Unchecked="RichPresenceToggle_Changed" />
+                    </Grid>
+                </Border>
+                <Border Margin="0,10,0,0" Padding="16,13" Background="{StaticResource RaisedBrush}"
+                        BorderBrush="{StaticResource LineBrush}" BorderThickness="1" CornerRadius="11">
+                    <Grid>
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="*" />
+                            <ColumnDefinition Width="Auto" />
+                        </Grid.ColumnDefinitions>
+                        <StackPanel>
+                            <TextBlock Text="Minimize after launch" FontSize="13" FontWeight="SemiBold" />
+                            <TextBlock Text="Keep RBXDowngrader in the system tray" Foreground="{StaticResource MutedBrush}"
+                                       FontSize="11" Margin="0,4,0,0" />
+                        </StackPanel>
+                        <CheckBox x:Name="MinimizeToTrayToggle" Grid.Column="1" Style="{StaticResource ToggleSwitch}"
+                                  VerticalAlignment="Center" Checked="MinimizeToTrayToggle_Changed"
+                                  Unchecked="MinimizeToTrayToggle_Changed" />
+                    </Grid>
+                </Border>
+                <Border Margin="0,10,0,0" Padding="16,13" Background="{StaticResource RaisedBrush}"
+                        BorderBrush="{StaticResource LineBrush}" BorderThickness="1" CornerRadius="11">
+                    <Grid>
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="*" />
+                            <ColumnDefinition Width="Auto" />
+                        </Grid.ColumnDefinitions>
+                        <StackPanel>
+                            <TextBlock Text="Automatic update checks" FontSize="13" FontWeight="SemiBold" />
+                            <TextBlock Text="Check once when RBXDowngrader starts" Foreground="{StaticResource MutedBrush}"
+                                       FontSize="11" Margin="0,4,0,0" />
+                        </StackPanel>
+                        <CheckBox x:Name="AutomaticUpdatesToggle" Grid.Column="1" Style="{StaticResource ToggleSwitch}"
+                                  VerticalAlignment="Center" Checked="AutomaticUpdatesToggle_Changed"
+                                  Unchecked="AutomaticUpdatesToggle_Changed" />
+                    </Grid>
+                </Border>
+            </StackPanel>
+        </Grid>
+    </Border>
+</Window>

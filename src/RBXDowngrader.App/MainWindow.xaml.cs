@@ -16,6 +16,9 @@ public partial class MainWindow : Window
     private readonly UpdateService _updateService = new();
     private readonly UpdateCheckThrottle _updateCheckThrottle = new();
     private readonly UpdateSkipStore _updateSkipStore = new();
+    private readonly SettingsStore _settingsStore = new();
+    private readonly DiscordPresenceService _discordPresence = new();
+    private readonly TrayIconService _trayIcon;
     private CancellationTokenSource? _downloadCancellation;
     private readonly CancellationTokenSource _lifetimeCancellation = new();
     private bool _isBusy;
@@ -24,6 +27,7 @@ public partial class MainWindow : Window
     private bool _isUpdating;
     private readonly bool _showUpdateFailure;
     private UpdateRelease? _availableUpdate;
+    private AppSettings _settings = new();
 
     public ObservableCollection<InstalledVersion> Versions { get; } = [];
     public ObservableCollection<RecentBuild> RecentBuilds { get; } = [];
@@ -33,6 +37,8 @@ public partial class MainWindow : Window
         InitializeComponent();
         DataContext = this;
         _showUpdateFailure = showUpdateFailure;
+        _settings = _settingsStore.Load();
+        _trayIcon = new TrayIconService(this);
         VersionLabel.Text = $"v{AppIdentity.Version.ToString(3)}";
     }
 
@@ -42,9 +48,11 @@ public partial class MainWindow : Window
         await RefreshVersionsAsync();
         TryPrefillVersionFromClipboard();
         VersionInput.Focus();
+        if (_settings.DiscordRichPresenceEnabled)
+            _discordPresence.Start();
         if (_showUpdateFailure)
             ShowUpdateFailure();
-        else
+        else if (_settings.AutomaticUpdateChecksEnabled)
             _ = CheckForUpdatesAsync(manual: false);
     }
 
@@ -248,6 +256,8 @@ public partial class MainWindow : Window
         {
             _store.Launch(version);
             SetStatus($"Launched {version.ShortHash}");
+            if (_settings.MinimizeToTrayOnLaunch)
+                _trayIcon.HideToTray();
         }
         catch (Exception ex)
         {
@@ -268,6 +278,8 @@ public partial class MainWindow : Window
         {
             _store.LaunchPrivateServer(version, dialog.PrivateServerUrl);
             SetStatus($"Launched private server with {version.ShortHash}");
+            if (_settings.MinimizeToTrayOnLaunch)
+                _trayIcon.HideToTray();
         }
         catch (Exception ex)
         {
@@ -294,6 +306,29 @@ public partial class MainWindow : Window
             _store.QueueDelete(version);
             Versions.Remove(version);
             UpdateInstalledSummary();
+        }
+        catch (Exception ex)
+        {
+            SetStatus(ToFriendlyMessage(ex), isError: true);
+        }
+    }
+
+    private void Shortcuts_Click(object sender, RoutedEventArgs e)
+    {
+        if (_isBusy || (sender as FrameworkElement)?.DataContext is not InstalledVersion version)
+            return;
+
+        try
+        {
+            var dialog = new ShortcutDialog(version, _store.GetShortcutState(version)) { Owner = this };
+            if (dialog.ShowDialog() != true)
+                return;
+
+            _store.SetShortcutState(
+                version,
+                dialog.CreateDesktopShortcut,
+                dialog.CreateStartMenuShortcut);
+            SetStatus("Shortcuts updated");
         }
         catch (Exception ex)
         {
@@ -528,6 +563,24 @@ public partial class MainWindow : Window
     }
 
     private void Minimize_Click(object sender, RoutedEventArgs e) => WindowState = WindowState.Minimized;
+
+    public void RestoreFromTray() => _trayIcon.Restore();
+
+    private void Settings_Click(object sender, RoutedEventArgs e)
+    {
+        var settingsWindow = new SettingsWindow(_settingsStore, _settings) { Owner = this };
+        settingsWindow.SettingsChanged += settings =>
+        {
+            _settings = settings;
+            if (settings.DiscordRichPresenceEnabled)
+                _discordPresence.Start();
+            else
+                _ = _discordPresence.StopAsync();
+        };
+        settingsWindow.ShowDialog();
+        _settings = settingsWindow.Settings;
+    }
+
     private void Close_Click(object sender, RoutedEventArgs e) => Close();
 
     protected override void OnClosed(EventArgs e)
@@ -537,6 +590,8 @@ public partial class MainWindow : Window
         _downloader.Dispose();
         _recentBuildService.Dispose();
         _updateService.Dispose();
+        _discordPresence.Dispose();
+        _trayIcon.Dispose();
         _lifetimeCancellation.Dispose();
         base.OnClosed(e);
     }
