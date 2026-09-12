@@ -11,7 +11,8 @@ public sealed class DiscordPresenceService : IDisposable
 {
     // The Discord developer application's public Application ID. This is not a secret.
     public const string DiscordApplicationClientId = "1548394384410673303";
-    private const string DownloadUrl = "https://github.com/0Chessz0/RBXDowngrader";
+    private const string DownloadUrl =
+        "https://github.com/0Chessz0/RBXDowngrader/releases/latest/download/RBXDowngraderSetup-win-x64.exe";
     private static readonly TimeSpan PollInterval = TimeSpan.FromSeconds(2);
     private static readonly TimeSpan DiscordRetryInterval = TimeSpan.FromSeconds(10);
     private readonly object _sync = new();
@@ -121,6 +122,12 @@ public sealed class DiscordPresenceService : IDisposable
                     continue;
                 }
 
+                if (!presenceIsSet)
+                {
+                    SetBrowsingPresence(client);
+                    presenceIsSet = true;
+                }
+
                 var newestLog = FindNewestLog();
                 if (newestLog is null)
                 {
@@ -148,9 +155,8 @@ public sealed class DiscordPresenceService : IDisposable
 
                 if (readResult.Activity?.Kind == RobloxActivityKind.Left)
                 {
-                    if (presenceIsSet)
-                        TryClearPresence(client);
-                    presenceIsSet = false;
+                    SetBrowsingPresence(client);
+                    presenceIsSet = true;
                     activePlaceId = null;
                 }
                 else if (readResult.Activity is { Kind: RobloxActivityKind.Joined, PlaceId: long placeId }
@@ -171,7 +177,7 @@ public sealed class DiscordPresenceService : IDisposable
                         WriteLog($"Could not resolve Roblox place {placeId}.", ex);
                     }
 
-                    SetPresence(client, gameName);
+                    SetPlayingPresence(client, gameName);
                     activePlaceId = placeId;
                     presenceIsSet = true;
                 }
@@ -291,11 +297,16 @@ public sealed class DiscordPresenceService : IDisposable
         }
     }
 
-    private static void SetPresence(DiscordRpcClient client, string gameName) =>
+    private static void SetBrowsingPresence(DiscordRpcClient client) =>
+        SetPresence(client, "Browsing Roblox");
+
+    private static void SetPlayingPresence(DiscordRpcClient client, string gameName) =>
+        SetPresence(client, $"Playing {gameName}");
+
+    private static void SetPresence(DiscordRpcClient client, string details) =>
         client.SetPresence(new RichPresence
         {
-            Details = $"Playing {gameName}",
-            State = "Using RBXDowngrader",
+            Details = details,
             Buttons =
             [
                 new Button

@@ -17,7 +17,7 @@ A small native Windows launcher for downloading, keeping, and launching Roblox p
 - Minimizes to a Restore/Exit tray icon after launching Roblox when enabled
 - Keeps the tray launcher available after Roblox closes for faster relaunching
 - Offers persisted settings for Discord Rich Presence, tray behavior, and startup update checks
-- Shows the current Roblox game in Discord Rich Presence when configured by the maintainer
+- Shows the current game, or that the user is browsing Roblox, in Discord Rich Presence
 - Offers user-initiated in-place updates from verified GitHub Release installer assets
 - Includes current-user and all-user installation, custom install paths, Start Menu registration, and a custom uninstaller
 
