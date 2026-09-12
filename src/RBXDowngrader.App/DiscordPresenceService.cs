@@ -9,8 +9,8 @@ namespace RBXDowngrader;
 
 public sealed class DiscordPresenceService : IDisposable
 {
-    // Maintainer setup: replace this value with the Discord Application ID.
-    public const string DiscordApplicationClientId = "REPLACE_WITH_DISCORD_APPLICATION_ID";
+    // The Discord developer application's public Application ID. This is not a secret.
+    public const string DiscordApplicationClientId = "1548394384410673303";
     private const string DownloadUrl = "https://github.com/0Chessz0/RBXDowngrader";
     private static readonly TimeSpan PollInterval = TimeSpan.FromSeconds(2);
     private static readonly TimeSpan DiscordRetryInterval = TimeSpan.FromSeconds(10);

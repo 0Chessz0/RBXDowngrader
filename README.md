@@ -46,7 +46,7 @@ The Discord application is configured once by the RBXDowngrader maintainer. End 
 2. Select **New Application**, name it `RBXDowngrader`, and create it.
 3. Optional: open **Rich Presence** > **Art Assets** to add images for a future presence layout.
 4. Open **General Information** and copy the **Application ID**.
-5. Replace `REPLACE_WITH_DISCORD_APPLICATION_ID` in `src/RBXDowngrader.App/DiscordPresenceService.cs` with that Application ID, then rebuild the installer.
+5. Replace `DiscordApplicationClientId` in `src/RBXDowngrader.App/DiscordPresenceService.cs` if the project moves to a different Discord application, then rebuild the installer.
 
 The setting is enabled by default. If the ID is not configured, Discord is closed, or Roblox logs are unavailable, Rich Presence stays inactive and writes only to the application log.
 
