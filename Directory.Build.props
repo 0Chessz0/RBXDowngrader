@@ -5,7 +5,7 @@
     <ImplicitUsings>enable</ImplicitUsings>
     <TreatWarningsAsErrors>true</TreatWarningsAsErrors>
     <NuGetAudit>false</NuGetAudit>
-    <Version>2.0.0</Version>
+    <Version>2.0.1</Version>
     <Company>RBXDowngrader</Company>
     <Copyright>Copyright © 2026</Copyright>
   </PropertyGroup>
