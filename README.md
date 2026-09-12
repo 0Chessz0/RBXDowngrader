@@ -11,10 +11,11 @@ A small native Windows launcher for downloading, keeping, and launching Roblox p
 - Shows the five newest known Windows builds in a compact live picker
 - Detects copied version hashes and private-server links
 - Supports custom names and total installed disk usage
-- Creates optional per-version Desktop and Start Menu shortcuts that follow renames
+- Creates optional per-version Desktop and Start Menu shortcuts that launch through RBXDowngrader and follow renames
 - Launches versions or removes them instantly with silent background cleanup
 - Opens Roblox private-server share links in any selected installed version
 - Minimizes to a Restore/Exit tray icon after launching Roblox when enabled
+- Keeps the tray launcher available after Roblox closes for faster relaunching
 - Offers persisted settings for Discord Rich Presence, tray behavior, and startup update checks
 - Shows the current Roblox game in Discord Rich Presence when configured by the maintainer
 - Offers user-initiated in-place updates from verified GitHub Release installer assets

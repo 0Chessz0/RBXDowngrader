@@ -26,34 +26,98 @@ public partial class MainWindow : Window
     private bool _isCheckingForUpdates;
     private bool _isUpdating;
     private readonly bool _showUpdateFailure;
+    private readonly string? _startupLaunchVersion;
+    private readonly Queue<string> _pendingLaunchVersions = new();
+    private bool _versionsLoaded;
     private UpdateRelease? _availableUpdate;
     private AppSettings _settings = new();
 
     public ObservableCollection<InstalledVersion> Versions { get; } = [];
     public ObservableCollection<RecentBuild> RecentBuilds { get; } = [];
 
-    public MainWindow(bool showUpdateFailure = false)
+    public MainWindow(bool showUpdateFailure = false, string? startupLaunchVersion = null)
     {
         InitializeComponent();
         DataContext = this;
         _showUpdateFailure = showUpdateFailure;
+        _startupLaunchVersion = startupLaunchVersion;
         _settings = _settingsStore.Load();
         _trayIcon = new TrayIconService(this);
         VersionLabel.Text = $"v{AppIdentity.Version.ToString(3)}";
+
+        if (_startupLaunchVersion is not null)
+        {
+            Opacity = 0;
+            ShowActivated = false;
+            ShowInTaskbar = false;
+        }
     }
 
     private async void Window_Loaded(object sender, RoutedEventArgs e)
     {
         AppPaths.EnsureCreated();
         await RefreshVersionsAsync();
-        TryPrefillVersionFromClipboard();
-        VersionInput.Focus();
+        _versionsLoaded = true;
         if (_settings.DiscordRichPresenceEnabled)
             _discordPresence.Start();
         if (_showUpdateFailure)
             ShowUpdateFailure();
         else if (_settings.AutomaticUpdateChecksEnabled)
             _ = CheckForUpdatesAsync(manual: false);
+
+        if (_startupLaunchVersion is not null)
+            LaunchVersionFromShortcut(_startupLaunchVersion);
+        else
+        {
+            TryPrefillVersionFromClipboard();
+            VersionInput.Focus();
+        }
+
+        while (_pendingLaunchVersions.TryDequeue(out var pendingVersion))
+            LaunchVersionFromShortcut(pendingVersion);
+    }
+
+    public void HandleVersionLaunchRequest(string version)
+    {
+        if (!_versionsLoaded)
+        {
+            _pendingLaunchVersions.Enqueue(version);
+            return;
+        }
+
+        LaunchVersionFromShortcut(version);
+    }
+
+    private void LaunchVersionFromShortcut(string version)
+    {
+        var installed = Versions.FirstOrDefault(candidate =>
+            candidate.Version.Equals(version, StringComparison.OrdinalIgnoreCase));
+        if (installed is null)
+        {
+            RevealAfterShortcutFailure();
+            SetStatus("That Roblox version is no longer installed", isError: true);
+            return;
+        }
+
+        try
+        {
+            _store.Launch(installed);
+            SetStatus($"Launched {installed.ShortHash}");
+            _trayIcon.HideToTray();
+            Opacity = 1;
+        }
+        catch (Exception ex)
+        {
+            RevealAfterShortcutFailure();
+            SetStatus(ToFriendlyMessage(ex), isError: true);
+        }
+    }
+
+    private void RevealAfterShortcutFailure()
+    {
+        Opacity = 1;
+        ShowActivated = true;
+        _trayIcon.Restore();
     }
 
     private async Task CheckForUpdatesAsync(bool manual)

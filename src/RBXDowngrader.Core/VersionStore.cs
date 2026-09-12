@@ -37,8 +37,11 @@ public sealed class VersionStore
             var size = await Task.Run(() => GetDirectorySize(directory, cancellationToken), cancellationToken)
                 .ConfigureAwait(false);
 
-            results.Add(new InstalledVersion(
-                Path.GetFileName(directory), directory, installedAt, size, executable, metadata?.CustomName));
+            var installedVersion = new InstalledVersion(
+                Path.GetFileName(directory), directory, installedAt, size, executable, metadata?.CustomName);
+            try { _shortcuts.UpgradeExisting(installedVersion); }
+            catch { }
+            results.Add(installedVersion);
         }
 
         return results.OrderByDescending(version => version.InstalledAt).ToArray();

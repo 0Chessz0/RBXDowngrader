@@ -1,3 +1,4 @@
+using System.IO;
 using System.Windows;
 using RBXDowngrader.Core;
 
@@ -7,6 +8,7 @@ public partial class App : Application
 {
     private const string InstanceMutexName = @"Local\RBXDowngrader.SingleInstance";
     private const string ActivationEventName = @"Local\RBXDowngrader.Activate";
+    private const string LaunchRequestPattern = "launch-request-*.txt";
     private readonly CancellationTokenSource _activationCancellation = new();
     private Mutex? _instanceMutex;
     private EventWaitHandle? _activationEvent;
@@ -49,6 +51,8 @@ public partial class App : Application
 
         if (!TryBecomePrimaryInstance())
         {
+            if (VersionLaunchRequest.TryParse(e.Args, out var forwardedVersion))
+                TryQueueLaunchRequest(forwardedVersion);
             SignalPrimaryInstance();
             Shutdown();
             return;
@@ -62,11 +66,14 @@ public partial class App : Application
                 ? (UpdateRoot: e.Args[1], BackupRoot: e.Args[2])
                 : ((string UpdateRoot, string BackupRoot)?)null;
         var updateFailed = e.Args.Contains(UpdateWorker.FailedArgument, StringComparer.OrdinalIgnoreCase);
+        var startupLaunchVersion = VersionLaunchRequest.TryParse(e.Args, out var requestedVersion)
+            ? requestedVersion
+            : null;
 
         ShutdownMode = ShutdownMode.OnMainWindowClose;
         try
         {
-            var window = new MainWindow(updateFailed);
+            var window = new MainWindow(updateFailed, startupLaunchVersion);
             MainWindow = window;
             window.Show();
         }
@@ -86,6 +93,8 @@ public partial class App : Application
         }
 
         _activationListener = ListenForActivationAsync(_activationCancellation.Token);
+        if (HasQueuedLaunchRequests())
+            _activationEvent?.Set();
         if (cleanupArguments is { } cleanup)
             _ = CleanupUpdateAsync(cleanup.UpdateRoot, cleanup.BackupRoot);
     }
@@ -134,6 +143,10 @@ public partial class App : Application
             var handles = new WaitHandle[] { _activationEvent, cancellationToken.WaitHandle };
             while (WaitHandle.WaitAny(handles) == 0)
             {
+                if (cancellationToken.IsCancellationRequested)
+                    break;
+
+                var requestedVersions = DequeueLaunchRequests();
                 Dispatcher.Invoke(() =>
                 {
                     if (MainWindow is null)
@@ -141,7 +154,11 @@ public partial class App : Application
 
                     if (MainWindow is MainWindow mainWindow)
                     {
-                        mainWindow.RestoreFromTray();
+                        if (requestedVersions.Count == 0)
+                            mainWindow.RestoreFromTray();
+                        else
+                            foreach (var version in requestedVersions)
+                                mainWindow.HandleVersionLaunchRequest(version);
                         return;
                     }
 
@@ -152,6 +169,60 @@ public partial class App : Application
                 });
             }
         }, CancellationToken.None);
+    }
+
+    private static void TryQueueLaunchRequest(string version)
+    {
+        try
+        {
+            AppPaths.EnsureCreated();
+            File.WriteAllText(
+                Path.Combine(AppPaths.Temp, $"launch-request-{Guid.NewGuid():N}.txt"),
+                version);
+        }
+        catch { }
+    }
+
+    private static bool HasQueuedLaunchRequests()
+    {
+        try
+        {
+            return Directory.Exists(AppPaths.Temp)
+                && Directory.EnumerateFiles(AppPaths.Temp, LaunchRequestPattern).Any();
+        }
+        catch
+        {
+            return false;
+        }
+    }
+
+    private static IReadOnlyList<string> DequeueLaunchRequests()
+    {
+        var versions = new List<string>();
+        try
+        {
+            if (!Directory.Exists(AppPaths.Temp))
+                return versions;
+
+            foreach (var path in Directory.EnumerateFiles(AppPaths.Temp, LaunchRequestPattern))
+            {
+                try
+                {
+                    var value = File.ReadAllText(path);
+                    if (VersionHash.TryNormalize(value, out var version))
+                        versions.Add(version);
+                }
+                catch { }
+                finally
+                {
+                    try { File.Delete(path); }
+                    catch { }
+                }
+            }
+        }
+        catch { }
+
+        return versions;
     }
 
     protected override void OnExit(ExitEventArgs e)

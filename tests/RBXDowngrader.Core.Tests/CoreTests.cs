@@ -1,4 +1,5 @@
 using System.IO.Compression;
+using System.Runtime.InteropServices;
 using RBXDowngrader.Core;
 
 namespace RBXDowngrader.Core.Tests;
@@ -66,9 +67,13 @@ public sealed class VersionShortcutServiceTests
             1,
             executable);
         var renamed = original with { CustomName = "Classic Roblox" };
-        var service = new VersionShortcutService(desktop, startMenu);
+        var launcherPath = Environment.ProcessPath!;
+        var service = new VersionShortcutService(desktop, startMenu, launcherPath);
 
         service.SetState(original, desktop: true, startMenu: true);
+        var shortcut = ReadShortcut(Path.Combine(desktop, "0123456789abcdef.lnk"));
+        Assert.Equal(Path.GetFullPath(launcherPath), Path.GetFullPath(shortcut.TargetPath));
+        Assert.Equal("--launch-version version-0123456789abcdef", shortcut.Arguments);
         service.RenameExisting(original, renamed);
 
         Assert.False(File.Exists(Path.Combine(desktop, "0123456789abcdef.lnk")));
@@ -101,6 +106,112 @@ public sealed class VersionShortcutServiceTests
         Assert.Equal(
             new VersionShortcutState(false, false),
             service.GetState(version with { CustomName = "Renamed" }));
+    }
+
+    [Fact]
+    public void UpgradesAnExistingDirectRobloxShortcutToTheTrayLauncher()
+    {
+        using var temporary = new TemporaryDirectory();
+        var desktop = Path.Combine(temporary.Path, "Desktop");
+        Directory.CreateDirectory(desktop);
+        var versionDirectory = Path.Combine(temporary.Path, "version-0123456789abcdef");
+        Directory.CreateDirectory(versionDirectory);
+        var playerPath = Path.Combine(versionDirectory, "RobloxPlayerBeta.exe");
+        File.WriteAllBytes(playerPath, [0]);
+        var version = new InstalledVersion(
+            "version-0123456789abcdef",
+            versionDirectory,
+            DateTimeOffset.UtcNow,
+            1,
+            playerPath);
+        var shortcutPath = Path.Combine(desktop, "0123456789abcdef.lnk");
+        CreateLegacyShortcut(shortcutPath, playerPath, versionDirectory);
+        var launcherPath = Environment.ProcessPath!;
+        var service = new VersionShortcutService(
+            desktop,
+            Path.Combine(temporary.Path, "StartMenu"),
+            launcherPath);
+
+        service.UpgradeExisting(version);
+
+        var shortcut = ReadShortcut(shortcutPath);
+        Assert.Equal(Path.GetFullPath(launcherPath), Path.GetFullPath(shortcut.TargetPath));
+        Assert.Equal("--launch-version version-0123456789abcdef", shortcut.Arguments);
+    }
+
+    private static void CreateLegacyShortcut(string path, string targetPath, string workingDirectory)
+    {
+        if (!OperatingSystem.IsWindows())
+            throw new PlatformNotSupportedException();
+
+        var shellType = Type.GetTypeFromProgID("WScript.Shell")!;
+        var shellObject = Activator.CreateInstance(shellType)!;
+        object? shortcutObject = null;
+        try
+        {
+            dynamic shell = shellObject;
+            shortcutObject = shell.CreateShortcut(path);
+            dynamic shortcut = shortcutObject;
+            shortcut.TargetPath = targetPath;
+            shortcut.WorkingDirectory = workingDirectory;
+            shortcut.Save();
+        }
+        finally
+        {
+            if (shortcutObject is not null && Marshal.IsComObject(shortcutObject))
+                Marshal.FinalReleaseComObject(shortcutObject);
+            if (Marshal.IsComObject(shellObject))
+                Marshal.FinalReleaseComObject(shellObject);
+        }
+    }
+
+    private static (string TargetPath, string Arguments) ReadShortcut(string path)
+    {
+        if (!OperatingSystem.IsWindows())
+            throw new PlatformNotSupportedException();
+
+        var shellType = Type.GetTypeFromProgID("WScript.Shell")!;
+        var shellObject = Activator.CreateInstance(shellType)!;
+        object? shortcutObject = null;
+        try
+        {
+            dynamic shell = shellObject;
+            shortcutObject = shell.CreateShortcut(path);
+            dynamic shortcut = shortcutObject;
+            return ((string)shortcut.TargetPath, (string)shortcut.Arguments);
+        }
+        finally
+        {
+            if (shortcutObject is not null && Marshal.IsComObject(shortcutObject))
+                Marshal.FinalReleaseComObject(shortcutObject);
+            if (Marshal.IsComObject(shellObject))
+                Marshal.FinalReleaseComObject(shellObject);
+        }
+    }
+}
+
+public sealed class VersionLaunchRequestTests
+{
+    [Fact]
+    public void ParsesTheVersionShortcutCommand()
+    {
+        Assert.True(VersionLaunchRequest.TryParse(
+            ["--launch-version", "version-0123456789ABCDEF"],
+            out var version));
+        Assert.Equal("version-0123456789abcdef", version);
+        Assert.Equal(
+            "--launch-version version-0123456789abcdef",
+            VersionLaunchRequest.CreateShortcutArguments(version));
+    }
+
+    [Theory]
+    [InlineData("--launch-version")]
+    [InlineData("--launch-version version-invalid")]
+    [InlineData("--unknown version-0123456789abcdef")]
+    public void RejectsInvalidShortcutCommands(string command)
+    {
+        var arguments = command.Split(' ', StringSplitOptions.RemoveEmptyEntries);
+        Assert.False(VersionLaunchRequest.TryParse(arguments, out _));
     }
 }
 

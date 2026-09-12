@@ -15,13 +15,19 @@ public sealed class VersionShortcutService
 
     private readonly string _desktopDirectory;
     private readonly string _startMenuDirectory;
+    private readonly string _launcherPath;
 
-    public VersionShortcutService(string? desktopDirectory = null, string? startMenuDirectory = null)
+    public VersionShortcutService(
+        string? desktopDirectory = null,
+        string? startMenuDirectory = null,
+        string? launcherPath = null)
     {
         _desktopDirectory = desktopDirectory
             ?? Environment.GetFolderPath(Environment.SpecialFolder.DesktopDirectory);
         _startMenuDirectory = startMenuDirectory
             ?? Environment.GetFolderPath(Environment.SpecialFolder.Programs);
+        _launcherPath = launcherPath ?? Environment.ProcessPath
+            ?? throw new InvalidOperationException("The RBXDowngrader executable path is unavailable.");
     }
 
     public VersionShortcutState GetState(InstalledVersion version) => new(
@@ -69,6 +75,7 @@ public sealed class VersionShortcutService
             {
                 MoveShortcut(move.Source, move.Destination);
                 completed.Push(move);
+                CreateShortcut(move.Destination, renamed);
             }
         }
         catch
@@ -88,6 +95,12 @@ public sealed class VersionShortcutService
         RemoveMatchingShortcut(_startMenuDirectory, version);
     }
 
+    public void UpgradeExisting(InstalledVersion version)
+    {
+        UpgradeExistingShortcut(_desktopDirectory, version);
+        UpgradeExistingShortcut(_startMenuDirectory, version);
+    }
+
     public static bool IsValidDisplayName(string name)
     {
         if (string.IsNullOrWhiteSpace(name)
@@ -102,7 +115,7 @@ public sealed class VersionShortcutService
         return !ReservedNames.Contains(stem);
     }
 
-    private static void AddRenameMove(
+    private void AddRenameMove(
         string directory,
         string locationName,
         InstalledVersion previous,
@@ -111,7 +124,7 @@ public sealed class VersionShortcutService
     {
         var previousPath = TryGetShortcutPath(directory, previous.DisplayName);
         if (previousPath is null || !File.Exists(previousPath)
-            || !ShortcutTargets(previousPath, previous.ExecutablePath))
+            || !ShortcutBelongsToVersion(previousPath, previous))
         {
             return;
         }
@@ -123,39 +136,52 @@ public sealed class VersionShortcutService
             locationName));
     }
 
-    private static void SetShortcut(string directory, InstalledVersion version, bool shouldExist)
+    private void SetShortcut(string directory, InstalledVersion version, bool shouldExist)
     {
         var path = GetShortcutPath(directory, version.DisplayName);
         if (!shouldExist)
         {
-            if (File.Exists(path) && ShortcutTargets(path, version.ExecutablePath))
+            if (File.Exists(path) && ShortcutBelongsToVersion(path, version))
                 File.Delete(path);
             return;
         }
 
         if (!File.Exists(version.ExecutablePath))
             throw new FileNotFoundException("RobloxPlayerBeta.exe is missing.", version.ExecutablePath);
+        if (!File.Exists(_launcherPath))
+            throw new FileNotFoundException("RBXDowngrader.exe is missing.", _launcherPath);
         Directory.CreateDirectory(directory);
-        if (File.Exists(path) && !ShortcutTargets(path, version.ExecutablePath))
+        if (File.Exists(path) && !ShortcutBelongsToVersion(path, version))
             throw new InvalidOperationException($"A shortcut named '{version.DisplayName}' already exists.");
 
         CreateShortcut(path, version);
     }
 
-    private static bool HasMatchingShortcut(string directory, InstalledVersion version)
+    private bool HasMatchingShortcut(string directory, InstalledVersion version)
     {
         var path = TryGetShortcutPath(directory, version.DisplayName);
-        return path is not null && File.Exists(path) && ShortcutTargets(path, version.ExecutablePath);
+        return path is not null && File.Exists(path) && ShortcutBelongsToVersion(path, version);
     }
 
-    private static void RemoveMatchingShortcut(string directory, InstalledVersion version)
+    private void RemoveMatchingShortcut(string directory, InstalledVersion version)
     {
         var path = TryGetShortcutPath(directory, version.DisplayName);
-        if (path is not null && File.Exists(path) && ShortcutTargets(path, version.ExecutablePath))
+        if (path is not null && File.Exists(path) && ShortcutBelongsToVersion(path, version))
             File.Delete(path);
     }
 
-    private static void CreateShortcut(string path, InstalledVersion version)
+    private void UpgradeExistingShortcut(string directory, InstalledVersion version)
+    {
+        var path = TryGetShortcutPath(directory, version.DisplayName);
+        if (path is null || !File.Exists(path))
+            return;
+
+        var details = ReadShortcut(path);
+        if (PathsEqual(details.TargetPath, version.ExecutablePath))
+            CreateShortcut(path, version);
+    }
+
+    private void CreateShortcut(string path, InstalledVersion version)
     {
         if (!OperatingSystem.IsWindows())
             throw new PlatformNotSupportedException("Version shortcuts are only supported on Windows.");
@@ -170,8 +196,9 @@ public sealed class VersionShortcutService
             dynamic shell = shellObject;
             shortcutObject = shell.CreateShortcut(path);
             dynamic shortcut = shortcutObject;
-            shortcut.TargetPath = version.ExecutablePath;
-            shortcut.WorkingDirectory = version.DirectoryPath;
+            shortcut.TargetPath = _launcherPath;
+            shortcut.Arguments = VersionLaunchRequest.CreateShortcutArguments(version.Version);
+            shortcut.WorkingDirectory = Path.GetDirectoryName(_launcherPath) ?? AppContext.BaseDirectory;
             shortcut.IconLocation = version.ExecutablePath;
             shortcut.Description = $"Launch {version.DisplayName}";
             shortcut.Save();
@@ -183,7 +210,17 @@ public sealed class VersionShortcutService
         }
     }
 
-    private static bool ShortcutTargets(string path, string executablePath)
+    private bool ShortcutBelongsToVersion(string path, InstalledVersion version)
+    {
+        var details = ReadShortcut(path);
+        if (PathsEqual(details.TargetPath, version.ExecutablePath))
+            return true;
+
+        return PathsEqual(details.TargetPath, _launcherPath)
+            && VersionLaunchRequest.MatchesShortcutArguments(details.Arguments, version.Version);
+    }
+
+    private static ShortcutDetails ReadShortcut(string path)
     {
         if (!OperatingSystem.IsWindows())
             throw new PlatformNotSupportedException("Version shortcuts are only supported on Windows.");
@@ -198,11 +235,9 @@ public sealed class VersionShortcutService
             dynamic shell = shellObject;
             shortcutObject = shell.CreateShortcut(path);
             dynamic shortcut = shortcutObject;
-            var target = (string)shortcut.TargetPath;
-            return !string.IsNullOrWhiteSpace(target)
-                && Path.GetFullPath(target).Equals(
-                    Path.GetFullPath(executablePath),
-                    StringComparison.OrdinalIgnoreCase);
+            return new ShortcutDetails(
+                (string)shortcut.TargetPath,
+                (string)shortcut.Arguments);
         }
         finally
         {
@@ -233,7 +268,9 @@ public sealed class VersionShortcutService
     }
 
     private static bool PathsEqual(string first, string second) =>
-        Path.GetFullPath(first).Equals(Path.GetFullPath(second), StringComparison.OrdinalIgnoreCase);
+        !string.IsNullOrWhiteSpace(first)
+        && !string.IsNullOrWhiteSpace(second)
+        && Path.GetFullPath(first).Equals(Path.GetFullPath(second), StringComparison.OrdinalIgnoreCase);
 
     private static string GetShortcutPath(string directory, string displayName) =>
         TryGetShortcutPath(directory, displayName)
@@ -252,4 +289,5 @@ public sealed class VersionShortcutService
     }
 
     private sealed record ShortcutMove(string Source, string Destination, string LocationName);
+    private sealed record ShortcutDetails(string TargetPath, string Arguments);
 }

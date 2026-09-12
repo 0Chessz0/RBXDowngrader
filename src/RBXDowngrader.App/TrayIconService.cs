@@ -50,6 +50,7 @@ public sealed class TrayIconService : IDisposable
             return;
 
         _notifyIcon.Visible = false;
+        _window.Opacity = 1;
         _window.ShowInTaskbar = true;
         _window.Show();
         if (_window.WindowState == WindowState.Minimized)
