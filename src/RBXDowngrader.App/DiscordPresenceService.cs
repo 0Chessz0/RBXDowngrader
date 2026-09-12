@@ -14,6 +14,7 @@ public sealed class DiscordPresenceService : IDisposable
     private const string DownloadUrl =
         "https://github.com/0Chessz0/RBXDowngrader/releases/latest/download/RBXDowngraderSetup-win-x64.exe";
     private static readonly TimeSpan PollInterval = TimeSpan.FromSeconds(2);
+    private static readonly TimeSpan PresenceRefreshInterval = TimeSpan.FromSeconds(20);
     private static readonly TimeSpan DiscordRetryInterval = TimeSpan.FromSeconds(10);
     private readonly object _sync = new();
     private readonly HttpClient _httpClient;
@@ -85,6 +86,8 @@ public sealed class DiscordPresenceService : IDisposable
         string? activeLogPath = null;
         long activeLogPosition = 0;
         long? activePlaceId = null;
+        string? currentPresenceDetails = null;
+        var nextPresenceRefresh = DateTimeOffset.MinValue;
         var presenceIsSet = false;
         var discordUnavailableLogged = false;
         var missingLogLogged = false;
@@ -115,6 +118,8 @@ public sealed class DiscordPresenceService : IDisposable
                         TryClearPresence(client);
                     presenceIsSet = false;
                     activePlaceId = null;
+                    currentPresenceDetails = null;
+                    nextPresenceRefresh = DateTimeOffset.MinValue;
                     activeLogPath = null;
                     activeLogPosition = 0;
                     missingLogLogged = false;
@@ -126,6 +131,16 @@ public sealed class DiscordPresenceService : IDisposable
                 {
                     SetBrowsingPresence(client);
                     presenceIsSet = true;
+                    currentPresenceDetails = "Browsing Roblox";
+                    nextPresenceRefresh = DateTimeOffset.UtcNow + PresenceRefreshInterval;
+                }
+
+                if (presenceIsSet
+                    && currentPresenceDetails is not null
+                    && DateTimeOffset.UtcNow >= nextPresenceRefresh)
+                {
+                    SetPresence(client, currentPresenceDetails);
+                    nextPresenceRefresh = DateTimeOffset.UtcNow + PresenceRefreshInterval;
                 }
 
                 var newestLog = FindNewestLog();
@@ -157,6 +172,8 @@ public sealed class DiscordPresenceService : IDisposable
                 {
                     SetBrowsingPresence(client);
                     presenceIsSet = true;
+                    currentPresenceDetails = "Browsing Roblox";
+                    nextPresenceRefresh = DateTimeOffset.UtcNow + PresenceRefreshInterval;
                     activePlaceId = null;
                 }
                 else if (readResult.Activity is { Kind: RobloxActivityKind.Joined, PlaceId: long placeId }
@@ -180,6 +197,8 @@ public sealed class DiscordPresenceService : IDisposable
                     SetPlayingPresence(client, gameName);
                     activePlaceId = placeId;
                     presenceIsSet = true;
+                    currentPresenceDetails = $"Playing {gameName}";
+                    nextPresenceRefresh = DateTimeOffset.UtcNow + PresenceRefreshInterval;
                 }
 
                 await Task.Delay(PollInterval, cancellationToken).ConfigureAwait(false);

@@ -51,6 +51,8 @@ The Discord application is configured once by the RBXDowngrader maintainer. End 
 
 The setting is enabled by default. If the ID is not configured, Discord is closed, or Roblox logs are unavailable, Rich Presence stays inactive and writes only to the application log.
 
+Discord's own Game Detection can sometimes show a generic `Playing Roblox` activity instead of RBXDowngrader's custom presence. If that happens, open Discord Settings > Activity Privacy > Registered Games and remove Roblox from the list, or disable automatic game detection. This is a one-time Discord-side setting that RBXDowngrader cannot control.
+
 The recent-build picker reads a five-item Windows history response from the public [RBXOffsets API](https://rbxoffsets.com/documents/api). Packages are still downloaded directly from Roblox deployment servers.
 
 ## Notes
